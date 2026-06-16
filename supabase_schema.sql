@@ -67,7 +67,17 @@ ALTER TABLE perfiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tipos_incidente ENABLE ROW LEVEL SECURITY;
 ALTER TABLE areas ENABLE ROW LEVEL SECURITY;
 
--- Políticas para incidentes
+-- Política para permitir acceso a la tabla incidentes (SOLUCIÓN ERROR PGRST205)
+-- IMPORTANTE: Si la app falla con "Could not find the table 'public.incidentes'",
+-- descomenta y ejecuta esta política para que anon también pueda ver la tabla:
+CREATE POLICY "Permitir todo a usuarios anonimos"
+ON public.incidentes
+FOR ALL
+TO anon
+USING (true)
+WITH CHECK (true);
+
+-- Políticas para incidentes (usuarios autenticados)
 CREATE POLICY "Usuarios autenticados pueden insertar incidentes"
   ON incidentes FOR INSERT
   TO authenticated
@@ -77,6 +87,11 @@ CREATE POLICY "Usuarios pueden ver sus propios incidentes"
   ON incidentes FOR SELECT
   TO authenticated
   USING (usuario_id = auth.uid());
+
+CREATE POLICY "Usuarios autenticados pueden ver todos los incidentes"
+  ON incidentes FOR SELECT
+  TO authenticated
+  USING (true);
 
 -- Políticas para perfiles
 CREATE POLICY "Perfiles visibles para todos los usuarios autenticados"

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ProReport/config/theme.dart';
+import 'package:proreport/config/theme.dart';
 
 void main() {
   testWidgets('App theme constants are defined', (WidgetTester tester) async {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/incidente_provider.dart';
@@ -166,10 +167,7 @@ class PhotoGrid extends StatelessWidget {
   Widget _buildImagePreview(
       BuildContext context, IncidenteProvider provider, int index) {
     final image = index < provider.selectedImages.length
-        ? Image.file(
-            File(provider.selectedImages[index].path),
-            fit: BoxFit.cover,
-          )
+        ? _buildPlatformImage(provider.selectedImages[index].path)
         : Image.memory(
             provider.webImagesBytes[
                 index - provider.selectedImages.length],
@@ -233,6 +231,30 @@ class PhotoGrid extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildPlatformImage(String imagePath) {
+    if (kIsWeb) {
+      return Image.network(
+        imagePath,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return const Center(
+            child: Icon(Icons.broken_image, color: Colors.red),
+          );
+        },
+      );
+    } else {
+      return Image.file(
+        File(imagePath),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return const Center(
+            child: Icon(Icons.broken_image, color: Colors.red),
+          );
+        },
+      );
+    }
   }
 
   void _showImageSourceDialog(

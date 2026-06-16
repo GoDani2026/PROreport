@@ -1,8 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
-import '../models/tipo_incidente.dart';
-import '../models/area.dart';
-import '../models/perfil.dart';
+import '../models/solicitud_levantamiento.dart';
 
 class SupabaseService {
   final SupabaseClient _client;

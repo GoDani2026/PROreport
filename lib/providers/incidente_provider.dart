@@ -2,10 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/incidente.dart';
-import '../models/tipo_incidente.dart';
-import '../models/area.dart';
-import '../models/perfil.dart';
+import '../models/solicitud_levantamiento.dart';
 import '../services/supabase_service.dart';
 import '../services/storage_service.dart';
 import '../config/supabase_config.dart';
@@ -67,6 +64,30 @@ class IncidenteProvider extends ChangeNotifier {
       _tiposIncidente = results[0] as List<TipoIncidente>;
       _areas = results[1] as List<Area>;
       _supervisores = results[2] as List<Perfil>;
+
+      // Si Supabase devuelve listas vacías, usamos datos de ejemplo
+      if (_tiposIncidente.isEmpty) {
+        _tiposIncidente = [
+          TipoIncidente(id: 1, nombre: 'Acto Inseguro'),
+          TipoIncidente(id: 2, nombre: 'Condición Insegura'),
+          TipoIncidente(id: 3, nombre: 'Casi Accidente'),
+        ];
+      }
+      if (_areas.isEmpty) {
+        _areas = [
+          Area(id: 1, nombre: 'Mina - Tajo Abierto'),
+          Area(id: 2, nombre: 'Planta de Procesos'),
+          Area(id: 3, nombre: 'Mantenimiento'),
+          Area(id: 4, nombre: 'Oficinas Administrativas'),
+        ];
+      }
+      if (_supervisores.isEmpty) {
+        _supervisores = [
+          Perfil(id: '1', nombreCompleto: 'Maron Batom', rol: 'supervisor'),
+          Perfil(id: '2', nombreCompleto: 'Ana García', rol: 'supervisor'),
+          Perfil(id: '3', nombreCompleto: 'Carlos López', rol: 'supervisor'),
+        ];
+      }
     } catch (e) {
       _errorMessage = 'Error al cargar datos: ${e.toString()}';
       // Datos de ejemplo para desarrollo sin Supabase
@@ -88,11 +109,11 @@ class IncidenteProvider extends ChangeNotifier {
             rol: 'supervisor'),
         Perfil(
             id: '2',
-            nombreCompleto: 'Ana García',
+            nombreCompleto: 'Korina Santos',
             rol: 'supervisor'),
         Perfil(
             id: '3',
-            nombreCompleto: 'Carlos López',
+            nombreCompleto: 'Carlos Matamba',
             rol: 'supervisor'),
       ];
     } finally {
@@ -285,12 +306,19 @@ class IncidenteProvider extends ChangeNotifier {
         // En producción podrías manejar esto diferente
       }
 
+      // Validar que el supervisorId sea un UUID válido antes de enviarlo
+      final supervisorId = _supervisor!.id;
+      final isUuid = RegExp(
+              r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+              caseSensitive: false)
+          .hasMatch(supervisorId);
+
       // Crear registro del incidente
       final incidente = Incidente(
         descripcion: _descripcion.trim(),
         tipoIncidenteId: _tipoIncidente!.id,
         areaId: _area!.id,
-        supervisorId: _supervisor!.id,
+        supervisorId: isUuid ? supervisorId : null,
         fotosUrls: fotosUrls,
         usuarioId: _client.auth.currentUser?.id,
       );

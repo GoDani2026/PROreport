@@ -4,7 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'config/theme.dart';
 import 'providers/incidente_provider.dart';
-import 'screens/home_screen.dart';
+import 'services/supabase_setup_service.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,9 @@ void main() async {
     url: SupabaseConfig.supabaseUrl,
     publishableKey: SupabaseConfig.supabasePublishableKey,
   );
+
+  // Auto-configurar tablas y bucket de Supabase si no existen
+  await SupabaseSetupService.ensureSetup();
 
   runApp(const ProReportApp());
 }
@@ -35,7 +39,7 @@ class ProReportApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        home: const HomeScreen(),
+        home: const LoginScreen(),
       ),
     );
   }
