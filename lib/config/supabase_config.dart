@@ -9,7 +9,7 @@ class SupabaseConfig {
   // NUNCA uses esta clave en una app de cliente.
   // Para producción, reemplázala por una variable de entorno segura.
   static const String supabaseServiceRoleKey =
-      'TU_SERVICE_ROLE_KEY_AQUI';
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlubGVja2VicXNzaXpnZW92Z292Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTMwOTEwNiwiZXhwIjoyMDk2ODg1MTA2fQ._UuVsouETXVscinOQHoG-euOptapwyqE6-LHS1Q6P1E';
 
   // Bucket names
   static const String storageBucket = 'incidentes_storage';

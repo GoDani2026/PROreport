@@ -10,6 +10,25 @@
 ---
 ---
 
+## [V0.5] - 2026-06-20
+
+### Funcionalidades y mejoras
+- **Build APK release corregido**: El proyecto Android ahora genera correctamente el APK en modo release con `flutter build apk --release`.
+
+### Correcciones
+- **Kotlin Gradle DSL inválido**: Se eliminó el bloque `kotlin { compilerOptions { jvmTarget = ... } }` de `android/app/build.gradle.kts`, ya que no era aplicable al módulo Android de Flutter y generaba errores de compilación.
+- **Compatibilidad Java 17**: Se mantuvo la configuración `JavaVersion.VERSION_17` en `compileOptions` para compatibilidad con las versiones actuales de Android Gradle Plugin y Kotlin.
+- **compileSdk mínimo para dependencias**: Se actualizó `compileSdk` a `36` en `android/app/build.gradle.kts` para cumplir con los requisitos de `flutter_plugin_android_lifecycle`.
+- **Subproyectos Android plugin**: Se agregó configuración en `android/build.gradle.kts` para forzar `compileSdk = 36` en subproyectos tipo Android library, permitiendo que plugins como `file_picker` compilen correctamente contra la versión requerida de Android APIs.
+
+### Problemas conocidos
+- La configuración de `compileSdk = 36` en subproyectos Android se mantiene como ajuste local de build para compatibilidad con dependencias actuales.
+
+### Sugerencias
+- Considerar actualizar Flutter SDK y Android Gradle Plugin en próximas iteraciones para reducir ajustes manuales de configuración Gradle.
+
+---
+
 ## [V0.4] - 2026-06-19
 
 ### Funcionalidades y mejoras
