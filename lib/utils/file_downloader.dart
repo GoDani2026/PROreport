@@ -1,0 +1,1 @@
+// Archivo reservado para compatibilidad. No contiene importaciones usadas.
