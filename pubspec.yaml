@@ -1,7 +1,7 @@
 name: proreport
 description: "Aplicación de Reporte de Incidentes - Seguridad y Salud Ocupacional"
 publish_to: 'none'
-version: 1.2.0+1
+version: 0.5
 
 environment:
   sdk: ^3.11.1
