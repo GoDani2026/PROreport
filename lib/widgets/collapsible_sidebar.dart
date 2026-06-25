@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../config/hse_theme.dart';
+import '../config/theme_context_ext.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MENU ITEM MODEL
@@ -47,27 +48,31 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final width = _isExpanded
-        ? HseTheme.sidebarExpandedWidth
-        : HseTheme.sidebarCollapsedWidth;
+    final ctx = context;
+    const expandedWidth = 220.0;
+    const collapsedWidth = 72.0;
+    const duration = Duration(milliseconds: 280);
+    const curve = Curves.easeInOutCubic;
+
+    final width = _isExpanded ? expandedWidth : collapsedWidth;
 
     return Row(
       children: [
         AnimatedContainer(
-          duration: HseTheme.sidebarAnimationDuration,
-          curve: HseTheme.sidebarAnimationCurve,
+          duration: duration,
+          curve: curve,
           width: width,
-          decoration: const BoxDecoration(
-            color: HseTheme.sidebarDark,
+          decoration: BoxDecoration(
+            color: ctx.surfaceSidebar,
             border: Border(
-              right: BorderSide(color: HseTheme.divider, width: 1),
+              right: BorderSide(color: ctx.borderColor, width: 1),
             ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 16),
-              _buildHeader(),
+              _buildHeader(ctx),
               const SizedBox(height: 24),
               ...widget.items.map(
                 (item) => _MenuItemTile(
@@ -79,7 +84,10 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
                 ),
               ),
               const Spacer(),
-              _buildUserFooter(),
+              if (_isExpanded) _buildThemeSelector(ctx),
+              !_isExpanded ? _buildThemeIconButton(ctx) : const SizedBox.shrink(),
+              const SizedBox(height: 4),
+              _buildUserFooter(ctx),
               const SizedBox(height: 12),
             ],
           ),
@@ -89,7 +97,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext ctx) {
     return GestureDetector(
       onTap: _toggle,
       child: Container(
@@ -101,9 +109,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
           horizontal: _isExpanded ? 10 : 6,
         ),
         decoration: BoxDecoration(
-          color: HseTheme.cardDark,
-          borderRadius: BorderRadius.circular(HseTheme.borderRadiusSm),
-          border: Border.all(color: HseTheme.cardBorder, width: 0.5),
+          color: ctx.surfaceCard,
+          borderRadius: BorderRadius.circular(6.0),
+          border: Border.all(color: ctx.borderColor, width: 0.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -115,24 +123,30 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
                 width: 24,
                 height: 24,
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  width: 24,
-                  height: 24,
-                  color: HseTheme.orange,
-                  child: const Icon(
-                    Icons.assessment_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                ),
+                errorBuilder: (context, error, stackTrace) {
+                  // Enhanced fallback with better error handling
+                  return Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: ctx.accentOrange,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Icon(
+                      Icons.assessment_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  );
+                },
               ),
             ),
             if (_isExpanded) ...[
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'ProReport',
                 style: TextStyle(
-                  color: HseTheme.textPrimary,
+                  color: ctx.sidebarTextPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
@@ -143,7 +157,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
               _isExpanded
                   ? Icons.chevron_left_rounded
                   : Icons.chevron_right_rounded,
-              color: HseTheme.textMuted,
+              color: ctx.sidebarTextMuted,
               size: 16,
             ),
           ],
@@ -152,37 +166,117 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
     );
   }
 
-  Widget _buildUserFooter() {
+  Widget _buildThemeSelector(BuildContext ctx) {
+    final themeProvider = context.watch<ThemeProvider>();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: ctx.surfaceCard,
+        borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(color: ctx.borderColor, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Apariencia',
+            style: TextStyle(
+              color: ctx.sidebarTextMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          _ThemeOption(
+            icon: Icons.light_mode_rounded,
+            label: 'Claro',
+            isSelected: themeProvider.mode == AppThemeMode.light,
+            onTap: () => themeProvider.setMode(AppThemeMode.light),
+            ctx: ctx,
+          ),
+          const SizedBox(height: 2),
+          _ThemeOption(
+            icon: Icons.dark_mode_rounded,
+            label: 'Oscuro',
+            isSelected: themeProvider.mode == AppThemeMode.dark,
+            onTap: () => themeProvider.setMode(AppThemeMode.dark),
+            ctx: ctx,
+          ),
+          const SizedBox(height: 2),
+          _ThemeOption(
+            icon: Icons.brightness_auto_rounded,
+            label: 'Automático',
+            isSelected: themeProvider.mode == AppThemeMode.system,
+            onTap: () => themeProvider.setMode(AppThemeMode.system),
+            ctx: ctx,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeIconButton(BuildContext ctx) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final icon = _getThemeIcon(themeProvider.mode);
+    return Tooltip(
+      message: 'Tema: ${themeProvider.mode.name.toUpperCase()}',
+      child: IconButton(
+        icon: Icon(icon, color: ctx.sidebarTextMuted, size: 18),
+        onPressed: () => _cycleThemeMode(themeProvider),
+        tooltip: 'Cambiar tema',
+      ),
+    );
+  }
+
+  IconData _getThemeIcon(AppThemeMode mode) {
+    return switch (mode) {
+      AppThemeMode.light => Icons.light_mode_rounded,
+      AppThemeMode.dark => Icons.dark_mode_rounded,
+      AppThemeMode.system => Icons.brightness_auto_rounded,
+    };
+  }
+
+  void _cycleThemeMode(ThemeProvider themeProvider) {
+    final next = switch (themeProvider.mode) {
+      AppThemeMode.light => AppThemeMode.dark,
+      AppThemeMode.dark => AppThemeMode.system,
+      AppThemeMode.system => AppThemeMode.light,
+    };
+    themeProvider.setMode(next);
+  }
+
+  Widget _buildUserFooter(BuildContext ctx) {
     return Container(
       margin: EdgeInsets.symmetric(
         horizontal: _isExpanded ? 10 : 6,
       ),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: HseTheme.cardDark,
-        borderRadius: BorderRadius.circular(HseTheme.borderRadiusSm),
-        border: Border.all(color: HseTheme.cardBorder, width: 0.5),
+        color: ctx.surfaceCard,
+        borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(color: ctx.borderColor, width: 0.5),
       ),
       child: _isExpanded
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 12,
-                  backgroundColor: HseTheme.orange,
-                  child: Icon(Icons.person, color: Colors.white, size: 12),
+                  backgroundColor: ctx.accentOrange,
+                  child: const Icon(Icons.person, color: Colors.white, size: 12),
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Daniel O.',
-                    style: TextStyle(color: HseTheme.textPrimary, fontSize: 11),
+                    style: TextStyle(color: ctx.sidebarTextPrimary, fontSize: 11),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.logout, color: HseTheme.red, size: 14),
-                  onPressed: () => _showLogoutDialog(),
+                  icon: Icon(Icons.logout, color: ctx.errorRed, size: 14),
+                  onPressed: () => _showLogoutDialog(ctx),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   tooltip: 'Cerrar Sesión',
@@ -190,56 +284,112 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
               ],
             )
           : IconButton(
-              icon: Icon(Icons.logout, color: HseTheme.red, size: 14),
-              onPressed: () => _showLogoutDialog(),
+              icon: Icon(Icons.logout, color: ctx.errorRed, size: 14),
+              onPressed: () => _showLogoutDialog(ctx),
               tooltip: 'Cerrar Sesión',
             ),
     );
   }
 
-  void _showLogoutDialog() {
+void _showLogoutDialog(BuildContext ctx) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: HseTheme.cardDark,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: ctx.surfaceCard,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(HseTheme.borderRadiusMd),
+          borderRadius: BorderRadius.circular(10.0),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: HseTheme.red, size: 24),
-            SizedBox(width: 8),
-            Text('Cerrar Sesión'),
+            Icon(Icons.warning_amber_rounded, color: ctx.errorRed, size: 24),
+            const SizedBox(width: 8),
+            const Text('Cerrar Sesión'),
           ],
         ),
-        content: const Text(
+        content: Text(
           '¿Estás seguro de que deseas cerrar sesión?',
-          style: TextStyle(color: HseTheme.textSecondary),
+          style: TextStyle(color: ctx.textSecondary),
         ),
-        actions: [
+          actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
               'Cancelar',
-              style: TextStyle(color: HseTheme.textSecondary),
+              style: TextStyle(color: ctx.textSecondary),
             ),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context); // Cerrar diálogo
-              final auth = context.read<AuthProvider>();
+              Navigator.pop(dialogContext);
+              final auth = dialogContext.read<AuthProvider>();
               await auth.signOut();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: HseTheme.red,
+              backgroundColor: ctx.errorRed,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(HseTheme.borderRadiusSm),
+                borderRadius: BorderRadius.circular(6.0),
               ),
             ),
             child: const Text('Cerrar'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// THEME OPTION ROW
+// ──────────────────────────────────────────────────────────────
+class _ThemeOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final BuildContext ctx;
+
+  const _ThemeOption({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    required this.ctx,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? ctx.accentOrange.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? ctx.accentOrange : ctx.sidebarTextMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? ctx.sidebarTextPrimary : ctx.sidebarTextSecondary,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+            const Spacer(),
+            if (isSelected)
+              Icon(Icons.check, size: 12, color: ctx.accentOrange),
+          ],
+        ),
       ),
     );
   }
@@ -268,6 +418,7 @@ class _MenuItemTileState extends State<_MenuItemTile> {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     final isActive = widget.item.isActive;
 
     return MouseRegion(
@@ -290,11 +441,11 @@ class _MenuItemTileState extends State<_MenuItemTile> {
                 ),
           decoration: BoxDecoration(
             color: isActive
-                ? HseTheme.accentBlue.withValues(alpha: 0.4)
+                ? ctx.sidebarActive
                 : _isHovered
-                    ? HseTheme.accentBlue.withValues(alpha: 0.2)
+                    ? ctx.sidebarHover
                     : Colors.transparent,
-            borderRadius: BorderRadius.circular(HseTheme.borderRadiusSm),
+            borderRadius: BorderRadius.circular(6.0),
             border: isActive
                 ? Border.all(
                     color: widget.item.color.withValues(alpha: 0.6),
@@ -302,7 +453,7 @@ class _MenuItemTileState extends State<_MenuItemTile> {
                   )
                 : _isHovered
                     ? Border.all(
-                        color: HseTheme.textMuted.withValues(alpha: 0.3),
+                        color: ctx.sidebarTextMuted.withValues(alpha: 0.3),
                         width: 0.5,
                       )
                     : null,
@@ -316,8 +467,8 @@ class _MenuItemTileState extends State<_MenuItemTile> {
                       color: isActive
                           ? widget.item.color
                           : _isHovered
-                              ? HseTheme.textPrimary
-                              : HseTheme.textMuted,
+                              ? ctx.sidebarTextPrimary
+                              : ctx.sidebarTextMuted,
                       size: 18,
                     ),
                   ),
@@ -327,10 +478,10 @@ class _MenuItemTileState extends State<_MenuItemTile> {
                     Icon(
                       widget.item.icon,
                       color: isActive
-                          ? HseTheme.orange
+                          ? widget.item.color
                           : _isHovered
-                              ? HseTheme.textSecondary
-                              : HseTheme.textMuted,
+                              ? ctx.sidebarTextSecondary
+                              : ctx.sidebarTextMuted,
                       size: 18,
                     ),
                     const SizedBox(width: 10),
@@ -339,10 +490,10 @@ class _MenuItemTileState extends State<_MenuItemTile> {
                         widget.item.label,
                         style: TextStyle(
                           color: isActive
-                              ? HseTheme.textPrimary
+                              ? ctx.sidebarTextPrimary
                               : _isHovered
-                                  ? HseTheme.textPrimary
-                                  : HseTheme.textSecondary,
+                                  ? ctx.sidebarTextPrimary
+                                  : ctx.sidebarTextSecondary,
                           fontSize: 12,
                           fontWeight: isActive || _isHovered
                               ? FontWeight.w600

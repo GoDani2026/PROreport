@@ -6,18 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import '../services/trabajador_service.dart';
 import '../utils/validators.dart';
 import '../widgets/collapsible_sidebar.dart';
-
-const _bgDark = Color(0xFF0A1628);
-const _cardDark = Color(0xFF132336);
-const _cardBorder = Color(0xFF1E3456);
-const _accentBlue = Color(0xFF1B3A5C);
-const _green = Color(0xFF00E676);
-const _yellow = Color(0xFFFFC107);
-const _red = Color(0xFFFF5252);
-const _orange = Color(0xFFFF6B35);
-const _textPrimary = Color(0xFFECEFF1);
-const _textSecondary = Color(0xFF90A4AE);
-const _textMuted = Color(0xFF607D8B);
+import '../config/theme_context_ext.dart';
 
 const _maxLote = 500;
 
@@ -97,18 +86,18 @@ class _FilaDiff {
   int get vigentes => cumplimientoArchivo.where((c) => c['valor_estado'] == 'VIGENTE').length;
   int get noVigentes => cumplimientoArchivo.length - vigentes;
 
-  Color get colorTipo => switch (tipo) {
-    _TipoCambio.invalido => _red.withValues(alpha: 0.25),
-    _TipoCambio.nuevo => _green.withValues(alpha: 0.15),
-    _TipoCambio.modificado => _yellow.withValues(alpha: 0.15),
-    _TipoCambio.sinCambios => _cardBorder.withValues(alpha: 0.25),
+  Color colorTipo(BuildContext ctx) => switch (tipo) {
+    _TipoCambio.invalido => ctx.errorRed.withValues(alpha: 0.25),
+    _TipoCambio.nuevo => ctx.successGreen.withValues(alpha: 0.15),
+    _TipoCambio.modificado => ctx.warningYellow.withValues(alpha: 0.15),
+    _TipoCambio.sinCambios => ctx.borderColor.withValues(alpha: 0.25),
   };
 
-  Color get colorEtiqueta => switch (tipo) {
-    _TipoCambio.invalido => _red,
-    _TipoCambio.nuevo => _green,
-    _TipoCambio.modificado => _yellow,
-    _TipoCambio.sinCambios => _textMuted,
+  Color colorEtiqueta(BuildContext ctx) => switch (tipo) {
+    _TipoCambio.invalido => ctx.errorRed,
+    _TipoCambio.nuevo => ctx.successGreen,
+    _TipoCambio.modificado => ctx.warningYellow,
+    _TipoCambio.sinCambios => ctx.textMuted,
   };
 }
 
@@ -134,18 +123,21 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
   String? _resultadoMensaje;
   int _insertados = 0, _actualizados = 0, _cumplimientoInsertados = 0, _erroresEjecucion = 0;
 
+  BuildContext get ctx => context;
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 900;
+    final ctx = context;
     return Scaffold(
-      backgroundColor: _bgDark,
+      backgroundColor: ctx.surfaceBg,
       body: Stack(
         children: [
           isWide
               ? CollapsibleSidebar(
                   items: [
-                    MenuItem(icon: Icons.dashboard_rounded, label: 'Inicio / Dashboard', color: _accentBlue, onTap: () => Navigator.pop(context)),
-                    MenuItem(icon: Icons.upload_file_rounded, label: 'Carga Masiva', color: _orange, isActive: true, onTap: () {}),
+                    MenuItem(icon: Icons.dashboard_rounded, label: 'Inicio / Dashboard', color: ctx.accentBlue, onTap: () => Navigator.pop(context)),
+                    MenuItem(icon: Icons.upload_file_rounded, label: 'Carga Masiva', color: ctx.accentOrange, isActive: true, onTap: () {}),
                   ],
                   child: _buildBody(),
                 )
@@ -153,15 +145,15 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
           if (_isLoading)
             Container(
               color: Colors.black54,
-              child: const Center(
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: _orange),
-                    SizedBox(height: 16),
-                    Text('Procesando...', style: TextStyle(color: Colors.white, fontSize: 16)),
-                    SizedBox(height: 4),
-                    Text('Esto puede tomar unos segundos', style: TextStyle(color: _textSecondary, fontSize: 12)),
+                    CircularProgressIndicator(color: ctx.accentOrange),
+                    const SizedBox(height: 16),
+                    Text('Procesando...', style: TextStyle(color: ctx.textPrimary, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text('Esto puede tomar unos segundos', style: TextStyle(color: ctx.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
@@ -180,11 +172,11 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
 
   Widget _buildHeader() => Container(
     padding: const EdgeInsets.fromLTRB(24, 14, 24, 10),
-    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _cardBorder, width: 1))),
+    decoration: BoxDecoration(color: ctx.surfaceCard, border: Border(bottom: BorderSide(color: ctx.borderColor, width: 1))),
     child: Row(
       children: [
         IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: _textSecondary),
+          icon: Icon(Icons.arrow_back_rounded, color: ctx.textSecondary),
           onPressed: () {
             if (_paso == 1 || _resultadoMensaje != null) {
               Navigator.pop(context);
@@ -195,11 +187,11 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
         ),
         const SizedBox(width: 4),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Carga Masiva de Personal', style: TextStyle(color: _textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('Carga Masiva de Personal', style: TextStyle(color: ctx.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
-          Text(_tituloPaso(), style: const TextStyle(color: _textSecondary, fontSize: 11)),
+          Text(_tituloPaso(), style: TextStyle(color: ctx.textSecondary, fontSize: 11)),
         ])),
-        _StepperIndicator(pasoActual: _paso),
+        _StepperIndicator(pasoActual: _paso, ctx: ctx),
       ],
     ),
   );
@@ -216,93 +208,93 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
 
   Widget _buildPaso1() {
     final tieneArchivo = _archivoBytes != null;
-    final colorBorde = tieneArchivo ? _green.withValues(alpha: 0.6) : _cardBorder;
+    final colorBorde = tieneArchivo ? ctx.successGreen.withValues(alpha: 0.6) : ctx.borderColor;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TarjetaContenido(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Seleccionar archivo', style: TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+      _TarjetaContenido(ctx: ctx, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Seleccionar archivo', style: TextStyle(color: ctx.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
         const SizedBox(height: 16),
         InkWell(
           onTap: _isLoading ? null : _pickArchivo,
           borderRadius: BorderRadius.circular(12),
           child: Container(
             width: double.infinity, padding: const EdgeInsets.all(40),
-            decoration: BoxDecoration(color: _bgDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: colorBorde, width: 1.5)),
+            decoration: BoxDecoration(color: ctx.surfaceBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: colorBorde, width: 1.5)),
             child: Column(children: [
-              Icon(tieneArchivo ? Icons.check_circle_rounded : Icons.upload_file_rounded, color: tieneArchivo ? _green : colorBorde, size: 52),
+              Icon(tieneArchivo ? Icons.check_circle_rounded : Icons.upload_file_rounded, color: tieneArchivo ? ctx.successGreen : colorBorde, size: 52),
               const SizedBox(height: 12),
-              Text(_archivoNombre ?? 'Toca para seleccionar CSV o XLSX', style: TextStyle(color: _textSecondary, fontSize: 13), textAlign: TextAlign.center),
+              Text(_archivoNombre ?? 'Toca para seleccionar CSV o XLSX', style: TextStyle(color: ctx.textSecondary, fontSize: 13), textAlign: TextAlign.center),
               if (tieneArchivo) ...[
                 const SizedBox(height: 8),
-                Text('${(_archivoBytes!.length / 1024).toStringAsFixed(1)} KB — listo', style: const TextStyle(color: _green, fontSize: 12, fontWeight: FontWeight.w600)),
+                Text('${(_archivoBytes!.length / 1024).toStringAsFixed(1)} KB — listo', style: TextStyle(color: ctx.successGreen, fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ]),
           ),
         ),
         const SizedBox(height: 20),
-        if (_errorGeneral != null) _ErrorBox(mensaje: _errorGeneral!),
+        if (_errorGeneral != null) _ErrorBox(mensaje: _errorGeneral!, ctx: ctx),
         const SizedBox(height: 16),
         if (tieneArchivo)
           SizedBox(width: double.infinity, child: ElevatedButton.icon(
             onPressed: _isLoading ? null : _procesarArchivo,
             icon: const Icon(Icons.read_more_rounded, size: 20),
             label: const Text('Validar y comparar con BD'),
-            style: ElevatedButton.styleFrom(backgroundColor: _orange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+            style: ElevatedButton.styleFrom(backgroundColor: ctx.accentOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
           )),
       ])),
     ]);
   }
 
   Widget _buildPaso2() {
-    if (_filas.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: _orange)));
+    if (_filas.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(40), child: CircularProgressIndicator(color: ctx.accentOrange)));
     final cols = _columnasTabla();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _ResumenCarga(nuevos: _nuevos, modificados: _modificados, sinCambios: _sinCambios, invalidos: _invalidos, validos: _validos),
+      _ResumenCarga(nuevos: _nuevos, modificados: _modificados, sinCambios: _sinCambios, invalidos: _invalidos, validos: _validos, ctx: ctx),
       const SizedBox(height: 20),
-      if (_errorGeneral != null) _ErrorBox(mensaje: _errorGeneral!),
+      if (_errorGeneral != null) _ErrorBox(mensaje: _errorGeneral!, ctx: ctx),
       const SizedBox(height: 12),
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
-          headingRowColor: WidgetStateProperty.all(_accentBlue.withValues(alpha: 0.4)),
-          headingTextStyle: const TextStyle(color: _textPrimary, fontSize: 10, fontWeight: FontWeight.bold),
-          dataTextStyle: const TextStyle(color: _textPrimary, fontSize: 10),
+          headingRowColor: WidgetStateProperty.all(ctx.accentBlue.withValues(alpha: 0.4)),
+          headingTextStyle: TextStyle(color: ctx.textPrimary, fontSize: 10, fontWeight: FontWeight.bold),
+          dataTextStyle: TextStyle(color: ctx.textPrimary, fontSize: 10),
           columnSpacing: 8,
           horizontalMargin: 6,
-          columns: List.generate(cols.length, (i) => DataColumn(label: Text(cols[i]))),
+          columns: List.generate(cols.length, (i) => DataColumn(label: Text(cols[i], style: TextStyle(color: ctx.textSecondary, fontSize: 10, fontWeight: FontWeight.bold)))),
           rows: _filas.asMap().entries.map((entry) {
             final idx = entry.key;
             final f = entry.value;
             final d = f.datosArchivo;
             return DataRow(
-              color: WidgetStateProperty.all(f.colorTipo),
+              color: WidgetStateProperty.all(f.colorTipo(ctx)),
               cells: [
                 DataCell(IconButton(
-                  icon: const Icon(Icons.remove_circle_outline_rounded, color: _red, size: 18),
+                  icon: Icon(Icons.remove_circle_outline_rounded, color: ctx.errorRed, size: 18),
                   onPressed: () => _eliminarFila(idx),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 )),
-                DataCell(Text('${f.numeroFila}')),
+                DataCell(Text('${f.numeroFila}', style: TextStyle(color: ctx.textPrimary))),
                 DataCell(f.esOk
-                    ? Text(f.rut ?? '')
+                    ? Text(f.rut ?? '', style: TextStyle(color: ctx.textPrimary))
                     : GestureDetector(
                         onTap: () => _mostrarDialogoCorreccion(f),
                         child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.edit_rounded, color: _orange, size: 12),
+                          Icon(Icons.edit_rounded, color: ctx.accentOrange, size: 12),
                           const SizedBox(width: 2),
-                          Text(d['rut'] ?? '', style: const TextStyle(color: _red, decoration: TextDecoration.underline, fontSize: 10)),
+                          Text(d['rut'] ?? '', style: TextStyle(color: ctx.errorRed, decoration: TextDecoration.underline, fontSize: 10)),
                         ]),
                       )),
-                DataCell(Text(d['nombre'] ?? '')),
-                DataCell(Text(d['apellido_paterno'] ?? '')),
-                DataCell(Text(d['apellido_materno'] ?? '')),
-                DataCell(Text(d['cargo'] ?? '')),
-                DataCell(Text(d['nacionalidad'] ?? '')),
-                DataCell(Text(d['fecha_vencimiento_residencia'] ?? '')),
-                DataCell(Text(d['sexo'] ?? '')),
-                DataCell(Text(d['turno'] ?? '')),
-                DataCell(Text(d['contrato_codigo'] ?? '')),
-                DataCell(Text(d['estado_trabajador'] ?? '')),
+                DataCell(Text(d['nombre'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['apellido_paterno'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['apellido_materno'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['cargo'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['nacionalidad'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['fecha_vencimiento_residencia'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['sexo'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['turno'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['contrato_codigo'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(Text(d['estado_trabajador'] ?? '', style: TextStyle(color: ctx.textPrimary))),
                 ...List.generate(12, (ri) {
                   final estado = ri < f.cumplimientoArchivo.length
                       ? (f.cumplimientoArchivo[ri]['valor_estado'] as String)
@@ -310,7 +302,7 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
                   return DataCell(Text(
                     estado == 'VIGENTE' ? 'V' : (estado == 'VENCIDO' ? 'X' : '-'),
                     style: TextStyle(
-                      color: estado == 'VIGENTE' ? _green : (estado == 'VENCIDO' ? _red : _textMuted),
+                      color: estado == 'VIGENTE' ? ctx.successGreen : (estado == 'VENCIDO' ? ctx.errorRed : ctx.textMuted),
                       fontWeight: estado == 'VIGENTE' ? FontWeight.bold : FontWeight.normal,
                     ),
                   ));
@@ -322,34 +314,34 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       ),
       const SizedBox(height: 12),
       Wrap(spacing: 16, runSpacing: 8, children: [
-        _leyenda(_green, 'Nuevo'),
-        _leyenda(_yellow, 'Modificado'),
-        _leyenda(_red, 'Inválido'),
-        _leyenda(_textMuted, 'Sin cambios'),
-        _chipLeyenda(_green, 'V', 'Vigente'),
-        _chipLeyenda(_red, 'X', 'Vencido'),
-        _chipLeyenda(_textMuted, '-', 'N/A'),
+        _leyenda(ctx.successGreen, 'Nuevo', ctx),
+        _leyenda(ctx.warningYellow, 'Modificado', ctx),
+        _leyenda(ctx.errorRed, 'Inválido', ctx),
+        _leyenda(ctx.textMuted, 'Sin cambios', ctx),
+        _chipLeyenda(ctx.successGreen, 'V', 'Vigente', ctx),
+        _chipLeyenda(ctx.errorRed, 'X', 'Vencido', ctx),
+        _chipLeyenda(ctx.textMuted, '-', 'N/A', ctx),
       ]),
       const SizedBox(height: 16),
       if (_invalidos > 0)
         Container(
           padding: const EdgeInsets.all(10),
           margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(color: _orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: _orange.withValues(alpha: 0.3))),
+          decoration: BoxDecoration(color: ctx.accentOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: ctx.accentOrange.withValues(alpha: 0.3))),
           child: Row(children: [
-            const Icon(Icons.edit_rounded, color: _orange, size: 18),
+            Icon(Icons.edit_rounded, color: ctx.accentOrange, size: 18),
             const SizedBox(width: 8),
-            const Expanded(child: Text('Toca el RUT en rojo para corregir datos', style: TextStyle(color: _textPrimary, fontSize: 12))),
+            Expanded(child: Text('Toca el RUT en rojo para corregir datos', style: TextStyle(color: ctx.textPrimary, fontSize: 12))),
           ]),
         ),
       Row(children: [
-        OutlinedButton(onPressed: () => setState(() => _paso = 1), child: const Text('Volver')),
+        OutlinedButton(onPressed: () => setState(() => _paso = 1), style: OutlinedButton.styleFrom(foregroundColor: ctx.textSecondary, side: BorderSide(color: ctx.borderColor)), child: const Text('Volver')),
         const SizedBox(width: 12),
         Expanded(child: ElevatedButton.icon(
           onPressed: _validos == 0 ? null : () => setState(() => _paso = 3),
           icon: const Icon(Icons.arrow_forward, size: 18),
           label: Text('Continuar ($_validos registros)'),
-          style: ElevatedButton.styleFrom(backgroundColor: _orange, foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(backgroundColor: ctx.accentOrange, foregroundColor: Colors.white),
         )),
       ]),
     ]);
@@ -359,25 +351,26 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
     setState(() { _filas.removeAt(idx); _recalcular(); });
   }
 
-  Widget _chipLeyenda(Color color, String simbolo, String texto) {
+  Widget _chipLeyenda(Color color, String simbolo, String texto, BuildContext ctx) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Container(width: 20, height: 20, alignment: Alignment.center,
         decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(3), border: Border.all(color: color.withValues(alpha: 0.4))),
         child: Text(simbolo, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold))),
       const SizedBox(width: 4),
-      Text(texto, style: const TextStyle(color: _textSecondary, fontSize: 11)),
+      Text(texto, style: TextStyle(color: ctx.textSecondary, fontSize: 11)),
     ]);
   }
 
-  Widget _leyenda(Color color, String texto) {
+  Widget _leyenda(Color color, String texto, BuildContext ctx) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
       const SizedBox(width: 4),
-      Text(texto, style: const TextStyle(color: _textSecondary, fontSize: 11)),
+      Text(texto, style: TextStyle(color: ctx.textSecondary, fontSize: 11)),
     ]);
   }
 
   Future<void> _mostrarDialogoCorreccion(_FilaDiff f) async {
+    final ctx = this.ctx;
     final rutCtrl = TextEditingController(text: f.datosArchivo['rut'] ?? '');
     final nombreCtrl = TextEditingController(text: f.datosArchivo['nombre'] ?? '');
     final apCtrl = TextEditingController(text: f.datosArchivo['apellido_paterno'] ?? '');
@@ -386,31 +379,31 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _cardDark,
-        title: Text('Corregir Fila ${f.numeroFila}', style: const TextStyle(color: _textPrimary)),
+      builder: (ctxDialog) => AlertDialog(
+        backgroundColor: ctx.surfaceCard,
+        title: Text('Corregir Fila ${f.numeroFila}', style: TextStyle(color: ctx.textPrimary)),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            _campoDialog('RUT (ej: 12.345.678-9)', rutCtrl),
+            _campoDialog(ctx, 'RUT (ej: 12.345.678-9)', rutCtrl),
             const SizedBox(height: 8),
-            _campoDialog('Nombre', nombreCtrl),
+            _campoDialog(ctx, 'Nombre', nombreCtrl),
             const SizedBox(height: 8),
-            _campoDialog('Apellido Paterno', apCtrl),
+            _campoDialog(ctx, 'Apellido Paterno', apCtrl),
             const SizedBox(height: 8),
-            _campoDialog('Cargo', cargoCtrl),
+            _campoDialog(ctx, 'Cargo', cargoCtrl),
             const SizedBox(height: 8),
-            _campoDialog('Turno', turnoCtrl),
+            _campoDialog(ctx, 'Turno', turnoCtrl),
             if (f.erroresValidacion.isNotEmpty) ...[
               const SizedBox(height: 12),
-              ...f.erroresValidacion.map((e) => Text('• $e', style: const TextStyle(color: _red, fontSize: 12))),
+              ...f.erroresValidacion.map((e) => Text('• $e', style: TextStyle(color: ctx.errorRed, fontSize: 12))),
             ],
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: _textSecondary))),
+          TextButton(onPressed: () => Navigator.pop(ctxDialog, false), child: Text('Cancelar', style: TextStyle(color: ctx.textSecondary))),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: _orange, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctxDialog, true),
+            style: ElevatedButton.styleFrom(backgroundColor: ctx.accentOrange, foregroundColor: Colors.white),
             child: const Text('Aplicar'),
           ),
         ],
@@ -448,15 +441,15 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
     }
   }
 
-  Widget _campoDialog(String label, TextEditingController ctrl) {
+  Widget _campoDialog(BuildContext ctx, String label, TextEditingController ctrl) {
     return TextField(
       controller: ctrl,
-      style: const TextStyle(color: _textPrimary, fontSize: 13),
+      style: TextStyle(color: ctx.textPrimary, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: _textSecondary, fontSize: 12),
-        enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: _cardBorder)),
-        focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: _orange)),
+        labelStyle: TextStyle(color: ctx.textSecondary, fontSize: 12),
+        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: ctx.borderColor)),
+        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: ctx.accentOrange)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       ),
     );
@@ -473,21 +466,21 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
   Widget _buildPaso3() {
     final aConfirmar = _soloInsertarNuevos ? _nuevos : _validos;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _ResumenCarga(nuevos: _nuevos, modificados: _modificados, sinCambios: _sinCambios, invalidos: _invalidos, validos: _validos),
+      _ResumenCarga(nuevos: _nuevos, modificados: _modificados, sinCambios: _sinCambios, invalidos: _invalidos, validos: _validos, ctx: ctx),
       const SizedBox(height: 20),
-      _TarjetaContenido(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _TarjetaContenido(ctx: ctx, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Checkbox(value: _soloInsertarNuevos, onChanged: (v) => setState(() => _soloInsertarNuevos = v ?? false), activeColor: _orange),
-          const Expanded(child: Text('Solo insertar registros nuevos', style: TextStyle(color: _textPrimary, fontSize: 13))),
+          Checkbox(value: _soloInsertarNuevos, onChanged: (v) => setState(() => _soloInsertarNuevos = v ?? false), activeColor: ctx.accentOrange),
+          Expanded(child: Text('Solo insertar registros nuevos', style: TextStyle(color: ctx.textPrimary, fontSize: 13))),
         ]),
         const SizedBox(height: 8),
-        Text('Se procesarán $aConfirmar registros con ${aConfirmar * 12} cumplimientos HSE.', style: TextStyle(color: _textSecondary, fontSize: 12)),
+        Text('Se procesarán $aConfirmar registros con ${aConfirmar * 12} cumplimientos HSE.', style: TextStyle(color: ctx.textSecondary, fontSize: 12)),
       ])),
       const SizedBox(height: 20),
-      if (_errorGeneral != null) _ErrorBox(mensaje: _errorGeneral!),
+      if (_errorGeneral != null) _ErrorBox(mensaje: _errorGeneral!, ctx: ctx),
       const SizedBox(height: 20),
       Row(children: [
-        OutlinedButton(onPressed: () => setState(() => _paso = 2), child: const Text('Volver')),
+        OutlinedButton(onPressed: () => setState(() => _paso = 2), style: OutlinedButton.styleFrom(foregroundColor: ctx.textSecondary, side: BorderSide(color: ctx.borderColor)), child: const Text('Volver')),
         const SizedBox(width: 12),
         Expanded(child: ElevatedButton.icon(
           onPressed: aConfirmar == 0 || _isLoading ? null : _ejecutarCarga,
@@ -495,7 +488,7 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Icon(Icons.upload_rounded, size: 20),
           label: Text(_isLoading ? 'Guardando...' : 'Confirmar y guardar ($aConfirmar)'),
-          style: ElevatedButton.styleFrom(backgroundColor: _green, foregroundColor: Colors.black87, padding: const EdgeInsets.symmetric(vertical: 14)),
+          style: ElevatedButton.styleFrom(backgroundColor: ctx.successGreen, foregroundColor: ctx.isDarkMode ? Colors.white : Colors.black87, padding: const EdgeInsets.symmetric(vertical: 14)),
         )),
       ]),
     ]);
@@ -504,19 +497,19 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
   Widget _buildResultado() {
     final exito = _erroresEjecucion == 0;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TarjetaContenido(child: Column(children: [
-        Icon(exito ? Icons.check_circle_rounded : Icons.error_rounded, color: exito ? _green : _red, size: 56),
+      _TarjetaContenido(ctx: ctx, child: Column(children: [
+        Icon(exito ? Icons.check_circle_rounded : Icons.error_rounded, color: exito ? ctx.successGreen : ctx.errorRed, size: 56),
         const SizedBox(height: 12),
-        Text(_resultadoMensaje ?? '', style: const TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+        Text(_resultadoMensaje ?? '', style: TextStyle(color: ctx.textPrimary, fontSize: 15, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
         const SizedBox(height: 8),
-        Text('Insertados: $_insertados  |  Actualizados: $_actualizados  |  Cumplimientos: $_cumplimientoInsertados  |  Errores: $_erroresEjecucion', style: TextStyle(color: _textSecondary, fontSize: 12)),
+        Text('Insertados: $_insertados  |  Actualizados: $_actualizados  |  Cumplimientos: $_cumplimientoInsertados  |  Errores: $_erroresEjecucion', style: TextStyle(color: ctx.textSecondary, fontSize: 12)),
       ])),
       const SizedBox(height: 20),
       SizedBox(width: double.infinity, child: ElevatedButton.icon(
         onPressed: () => Navigator.pop(context, true),
         icon: const Icon(Icons.check_rounded, size: 18),
         label: const Text('Volver a Gestión de Personal'),
-        style: ElevatedButton.styleFrom(backgroundColor: _accentBlue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+        style: ElevatedButton.styleFrom(backgroundColor: ctx.accentBlue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
       )),
     ]);
   }
@@ -953,74 +946,80 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
 
 class _StepperIndicator extends StatelessWidget {
   final int pasoActual;
-  const _StepperIndicator({required this.pasoActual});
+  final BuildContext ctx;
+  const _StepperIndicator({required this.pasoActual, required this.ctx});
   @override
   Widget build(BuildContext context) => Row(children: [
-    _StepCircle(activo: pasoActual == 1, completo: pasoActual > 1, label: '1'),
-    _StepLine(activo: pasoActual > 1),
-    _StepCircle(activo: pasoActual == 2, completo: pasoActual > 2, label: '2'),
-    _StepLine(activo: pasoActual > 2),
-    _StepCircle(activo: pasoActual == 3, completo: false, label: '3'),
+    _StepCircle(activo: pasoActual == 1, completo: pasoActual > 1, label: '1', ctx: ctx),
+    _StepLine(activo: pasoActual > 1, ctx: ctx),
+    _StepCircle(activo: pasoActual == 2, completo: pasoActual > 2, label: '2', ctx: ctx),
+    _StepLine(activo: pasoActual > 2, ctx: ctx),
+    _StepCircle(activo: pasoActual == 3, completo: false, label: '3', ctx: ctx),
   ]);
 }
 
 class _StepCircle extends StatelessWidget {
   final bool activo, completo;
   final String label;
-  const _StepCircle({required this.activo, required this.completo, required this.label});
+  final BuildContext ctx;
+  const _StepCircle({required this.activo, required this.completo, required this.label, required this.ctx});
   @override
   Widget build(BuildContext context) {
-    final color = completo ? _green : activo ? _orange : _textMuted;
+    final color = completo ? ctx.successGreen : activo ? ctx.accentOrange : ctx.textMuted;
     return Container(width: 30, height: 30,
       decoration: BoxDecoration(color: color.withValues(alpha: 0.2), shape: BoxShape.circle, border: Border.all(color: color, width: 1.5)),
-      child: Center(child: completo ? const Icon(Icons.check, color: _green, size: 18)
-          : Text(label, style: TextStyle(color: activo ? _textPrimary : _textMuted, fontSize: 13, fontWeight: FontWeight.bold))));
+      child: Center(child: completo ? Icon(Icons.check, color: ctx.successGreen, size: 18)
+          : Text(label, style: TextStyle(color: activo ? ctx.textPrimary : ctx.textMuted, fontSize: 13, fontWeight: FontWeight.bold))));
   }
 }
 
 class _StepLine extends StatelessWidget {
   final bool activo;
-  const _StepLine({required this.activo});
+  final BuildContext ctx;
+  const _StepLine({required this.activo, required this.ctx});
   @override
-  Widget build(BuildContext context) => Container(width: 32, height: 2, color: activo ? _orange : _cardBorder, margin: const EdgeInsets.symmetric(horizontal: 4));
+  Widget build(BuildContext context) => Container(width: 32, height: 2, color: activo ? ctx.accentOrange : ctx.borderColor, margin: const EdgeInsets.symmetric(horizontal: 4));
 }
 
 class _TarjetaContenido extends StatelessWidget {
   final Widget child;
-  const _TarjetaContenido({required this.child});
+  final BuildContext ctx;
+  const _TarjetaContenido({required this.child, required this.ctx});
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(14), border: Border.all(color: _cardBorder, width: 0.5)),
+    decoration: BoxDecoration(color: ctx.surfaceCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: ctx.borderColor, width: 0.5)),
     child: child,
   );
 }
 
 class _ErrorBox extends StatelessWidget {
   final String mensaje;
-  const _ErrorBox({required this.mensaje});
+  final BuildContext ctx;
+  const _ErrorBox({required this.mensaje, required this.ctx});
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity, padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(color: _red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8), border: Border.all(color: _red.withValues(alpha: 0.4))),
+    decoration: BoxDecoration(color: ctx.errorRed.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8), border: Border.all(color: ctx.errorRed.withValues(alpha: 0.4))),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Icon(Icons.error_outline_rounded, color: _red, size: 18),
+      Icon(Icons.error_outline_rounded, color: ctx.errorRed, size: 18),
       const SizedBox(width: 8),
-      Expanded(child: Text(mensaje, style: const TextStyle(color: _textPrimary, fontSize: 13))),
+      Expanded(child: Text(mensaje, style: TextStyle(color: ctx.textPrimary, fontSize: 13))),
     ]),
   );
 }
 
 class _ResumenCarga extends StatelessWidget {
   final int nuevos, modificados, sinCambios, invalidos, validos;
-  const _ResumenCarga({required this.nuevos, required this.modificados, required this.sinCambios, required this.invalidos, required this.validos});
+  final BuildContext ctx;
+  const _ResumenCarga({required this.nuevos, required this.modificados, required this.sinCambios, required this.invalidos, required this.validos, required this.ctx});
   @override
   Widget build(BuildContext context) {
     final items = [
-      _KpiCarga(label: 'Nuevos', valor: '$nuevos', color: _green),
-      _KpiCarga(label: 'Modificados', valor: '$modificados', color: _yellow),
-      _KpiCarga(label: 'Sin cambios', valor: '$sinCambios', color: _textMuted),
-      _KpiCarga(label: 'Inválidos', valor: '$invalidos', color: _red),
+      _KpiCarga(label: 'Nuevos', valor: '$nuevos', color: ctx.successGreen, ctx: ctx),
+      _KpiCarga(label: 'Modificados', valor: '$modificados', color: ctx.warningYellow, ctx: ctx),
+      _KpiCarga(label: 'Sin cambios', valor: '$sinCambios', color: ctx.textMuted, ctx: ctx),
+      _KpiCarga(label: 'Inválidos', valor: '$invalidos', color: ctx.errorRed, ctx: ctx),
     ];
     return LayoutBuilder(builder: (ctx, c) {
       if (c.maxWidth < 500) return Wrap(spacing: 8, runSpacing: 8, children: items.map((k) => SizedBox(width: (c.maxWidth - 8) / 2, child: k)).toList());
@@ -1032,7 +1031,8 @@ class _ResumenCarga extends StatelessWidget {
 class _KpiCarga extends StatelessWidget {
   final String label, valor;
   final Color color;
-  const _KpiCarga({required this.label, required this.valor, required this.color});
+  final BuildContext ctx;
+  const _KpiCarga({required this.label, required this.valor, required this.color, required this.ctx});
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
@@ -1040,7 +1040,7 @@ class _KpiCarga extends StatelessWidget {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(valor, style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold)),
       const SizedBox(height: 2),
-      Text(label, style: TextStyle(color: _textSecondary, fontSize: 11)),
+      Text(label, style: TextStyle(color: ctx.textSecondary, fontSize: 11)),
     ]),
   );
 }

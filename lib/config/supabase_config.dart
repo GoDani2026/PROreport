@@ -20,4 +20,5 @@ class SupabaseConfig {
   static const String tablePerfiles = 'perfiles';
   static const String tableDocumentosHse = 'documentos_hse';
   static const String tableCumplimiento = 'cumplimiento';
+  static const String tableDeteccionesPeligro = 'detecciones_peligro';
 }

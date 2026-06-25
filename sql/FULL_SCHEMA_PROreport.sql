@@ -292,6 +292,23 @@ INSERT INTO areas (id, nombre, descripcion) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
+-- RLS: áreas
+ALTER TABLE areas ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Catálogos visibles para usuarios autenticados"
+  ON areas FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- RLS: tipos_incidente
+ALTER TABLE tipos_incidente ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Catálogos visibles para usuarios autenticados"
+  ON tipos_incidente FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- ============================================================
 -- Tabla principal: incidentes (sin campo JSONB acciones_correctivas)
 CREATE TABLE IF NOT EXISTS public.incidentes (
   id SERIAL PRIMARY KEY,

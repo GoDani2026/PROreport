@@ -7,6 +7,9 @@ import 'config/theme.dart';
 import 'providers/incidente_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cumplimiento_provider.dart';
+import 'providers/peligro_provider.dart';
+import 'providers/theme_provider.dart';
+import 'services/peligros_service.dart';
 import 'services/supabase_setup_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -32,7 +35,33 @@ class ProReportApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const _ProReportAppWithTheme(),
+    );
+  }
+}
+
+class _ProReportAppWithTheme extends StatefulWidget {
+  const _ProReportAppWithTheme();
+
+  @override
+  State<_ProReportAppWithTheme> createState() => _ProReportAppWithThemeState();
+}
+
+class _ProReportAppWithThemeState extends State<_ProReportAppWithTheme> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ThemeProvider>().loadPreference();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final client = Supabase.instance.client;
+    final themeProvider = context.watch<ThemeProvider>();
 
     return MultiProvider(
       providers: [
@@ -47,12 +76,16 @@ class ProReportApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => CumplimientoProvider(client),
         ),
+        ChangeNotifierProvider(
+          create: (_) => PeligroProvider(PeligrosService(client: client)),
+        ),
       ],
       child: MaterialApp(
         title: 'PROreport',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
+        themeMode: themeProvider.themeMode,
         home: const _AuthenticationGate(),
       ),
     );

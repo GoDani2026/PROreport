@@ -8,6 +8,35 @@
 5. Subir a git
 
 
+## [V0.6] - 2026-06-25
+
+### Funcionalidades y mejoras
+- **Nuevo Módulo: Detecciones de Peligro**: Implementación completa del flujo "1 Reporte = 1 Registro" para reportar peligros en terreno, con seguimiento y cierre por parte del supervisor.
+- **Tabla transaccional `detecciones_peligro`**: Esquema en `sql/07_schema_detecciones_peligro.sql` con 20 campos que cubren Identificación, Hallazgo (Antes), Seguimiento/Compromiso, Cierre (Después), Notario Digital y Sistema. Incluye 5 índices, 3 políticas RLS y trigger de `updated_at`.
+- **RPC `iniciar_ejecucion_peligro`**: Función PostgreSQL que actualiza estatus a 'En Ejecución', asigna supervisor responsable, guarda plan de acción y fecha compromiso de eliminación.
+- **RPC `cerrar_peligro`**: Función PostgreSQL que actualiza estatus a 'Eliminada', guarda resumen y foto de cierre, y estampa atómicamente `fecha_cierre` con `NOW()`.
+- **Pantalla de Creación Ágil (Mobile-First)**: Formulario en `lib/screens/deteccion_peligro_screen.dart` con select dinámico de Área, botón GIGANTE para captura de foto evidencia con ImagePicker (Cámara/Galería), selector visual tipo Wrap/ChoiceChip para Nivel LGF (BAJO=Verde, MEDIO=Amarillo, SIGNIFICATIVO=Rojo), TextFields expansibles con icono de micrófono para dictado por voz, y botón "Guardar y Notificar". Datos automáticos: `usuario_reportante_id` y `turno` se obtienen sin intervención del usuario.
+- **Pantalla de Seguimiento/Cierre**: Vista de detalle en `lib/screens/seguimiento_peligro_screen.dart` con comportamiento dinámico según estatus: Pendiente → formulario de Compromiso (plan_accion + selector supervisor + DatePicker) con botón "Iniciar Ejecución" (RPC 1); En Ejecución → formulario de Cierre (resumen + foto) con botón "Cerrar Caso" (RPC 2); Eliminada → vista de solo lectura con metadata completa.
+- **Capa de servicio `PeligrosService`**: `lib/services/peligros_service.dart` con métodos `fetchAll()`, `fetchById()`, `fetchByEstatus()`, `insertDeteccion()`, `uploadFoto()`, `callIniciarEjecucion()`, `callCerrarPeligro()`, `fetchTurnoDelTrabajador()` y `fetchSupervisores()`. Incluye bloque TODO estructurado especificando la lógica de enrutamiento de correos para el backend (Webhooks + Edge Functions).
+- **Provider `PeligroProvider`**: `lib/providers/peligro_provider.dart` con ChangeNotifier que maneja estado del formulario de creación y flujo de seguimiento/cierre. Registrado en `MultiProvider` de `main.dart`.
+- **Navegación desde Drawer**: El ítem "Detecciones de Peligro" en el `CollapsibleSidebar` (web) y en `_MobileReportabilidadMenu` (móvil) ahora abre la pantalla de creación.
+- **Paleta unificada AppTheme**: Ambas pantallas usan exclusivamente la paleta oficial (`AppTheme.primaryBlue`, `AppTheme.accentOrange`, `AppTheme.successGreen`, etc.) eliminando colores hardcodeados.
+
+### Archivos nuevos
+- `sql/07_schema_detecciones_peligro.sql` — Schema completo + RLS + RPCs + índices + trigger
+- `lib/models/deteccion_peligro_model.dart` — Modelo Dart inmutable con `fromJson`/`toJson`/`copyWith`
+- `lib/services/peligros_service.dart` — Capa de acceso a datos (PeligrosService)
+- `lib/providers/peligro_provider.dart` — ChangeNotifier para estado del formulario y flujo
+- `lib/screens/deteccion_peligro_screen.dart` — Pantalla de creación de reporte (Pantalla A)
+- `lib/screens/seguimiento_peligro_screen.dart` — Pantalla de seguimiento/cierre (Pantalla B)
+
+### Archivos modificados
+- `lib/config/supabase_config.dart` — Nueva constante `tableDeteccionesPeligro`
+- `lib/main.dart` — `PeligroProvider` registrado en `MultiProvider`
+- `lib/screens/home_screen.dart` — Navegación desde Drawer web y menú móvil
+
+---
+
 ## [V0.5.5] - 2026-06-22
 
 ### Funcionalidades y mejoras

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../config/hse_theme.dart';
+import '../config/theme_context_ext.dart';
 import '../widgets/collapsible_sidebar.dart';
 import '../widgets/pressable_tile.dart';
 import 'solicitud_levantamiento_screen.dart';
 import 'gestion_personal_screen.dart';
+import 'deteccion_peligro_screen.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MAIN SCREEN – Responsive: Web (>=768) or Mobile (<768)
@@ -13,9 +14,10 @@ class HseDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     final isWide = MediaQuery.of(context).size.width >= 768;
     return Scaffold(
-      backgroundColor: HseTheme.bgDark,
+      backgroundColor: ctx.surfaceBg,
       body: isWide ? const _WebDashboard() : const _MobileDashboard(),
     );
   }
@@ -29,29 +31,48 @@ class _WebDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return CollapsibleSidebar(
       items: [
         MenuItem(
           icon: Icons.dashboard_rounded,
           label: 'Inicio / Dashboard',
-          color: HseTheme.accentBlue,
+          color: ctx.accentBlue,
           isActive: true,
-          onTap: () => Navigator.pop(context),
+          onTap: () {
+            // Already on dashboard, no navigation needed
+          },
         ),
         MenuItem(
           icon: Icons.warning_amber_rounded,
           label: 'Detecciones de Peligro',
-          color: HseTheme.yellow,
+          color: ctx.warningYellow,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const DeteccionPeligroScreen()),
+          ),
         ),
         MenuItem(
           icon: Icons.route_rounded,
           label: 'Caminatas de Seguridad',
-          color: HseTheme.green,
+          color: ctx.successGreen,
+          onTap: () {
+            // Set isActive for this item
+            // TODO: Navigate to security walks screen when implemented
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Módulo en desarrollo'),
+                backgroundColor: ctx.warningYellow,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
         ),
         MenuItem(
           icon: Icons.assignment_rounded,
           label: 'Solicitud de Levantamiento',
-          color: HseTheme.orange,
+          color: ctx.accentOrange,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -61,7 +82,7 @@ class _WebDashboard extends StatelessWidget {
         MenuItem(
           icon: Icons.people_rounded,
           label: 'Gestionar Personal',
-          color: HseTheme.green,
+          color: ctx.successGreen,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const GestionPersonalScreen()),
@@ -70,7 +91,7 @@ class _WebDashboard extends StatelessWidget {
       ],
       child: Column(
         children: [
-          const _DashboardHeader(),
+          _buildWebHeader(ctx),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -131,84 +152,79 @@ class _MobileDashboard extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD HEADER (Web)
 // ══════════════════════════════════════════════════════════════
-class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: HseTheme.divider, width: 1),
-        ),
+Widget _buildWebHeader(BuildContext ctx) {
+  return Container(
+    padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+    decoration: BoxDecoration(
+      border: Border(
+        bottom: BorderSide(color: ctx.dividerColor, width: 1),
       ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Image.asset(
-              'Logo.png',
-              width: 28,
-              height: 28,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.assessment_rounded,
-                color: HseTheme.orange,
-                size: 28,
-              ),
+    ),
+    child: Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.asset(
+            'Logo.png',
+            width: 28,
+            height: 28,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => Icon(
+              Icons.assessment_rounded,
+              color: ctx.accentOrange,
+              size: 28,
             ),
           ),
-          const SizedBox(width: 10),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Dashboard HSE',
+              style: ctx.headingLg,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Panel de control en tiempo real',
+              style: TextStyle(color: ctx.textSecondary, fontSize: 12),
+            ),
+          ],
+        ),
+        const Spacer(),
+        _HeaderBadge(
+            icon: Icons.shield_rounded, label: 'Seguro', color: ctx.successGreen),
+        const SizedBox(width: 12),
+        _HeaderBadge(
+            icon: Icons.notifications_none_rounded,
+            label: '3',
+            color: ctx.warningYellow),
+        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: ctx.surfaceCard,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
             children: [
-              Text(
-                'Dashboard HSE',
-                style: HseTheme.headingLg,
-              ),
-              SizedBox(height: 2),
-              Text(
-                'Panel de control en tiempo real',
-                style: TextStyle(color: HseTheme.textSecondary, fontSize: 12),
-              ),
+              Icon(Icons.calendar_today_rounded,
+                  color: ctx.textMuted, size: 14),
+              const SizedBox(width: 6),
+              Text('14 Jun 2026',
+                  style: TextStyle(
+                      color: ctx.textSecondary, fontSize: 12)),
             ],
           ),
-          const Spacer(),
-          _HeaderBadge(
-              icon: Icons.shield_rounded, label: 'Seguro', color: HseTheme.green),
-          const SizedBox(width: 12),
-          const _HeaderBadge(
-              icon: Icons.notifications_none_rounded,
-              label: '3',
-              color: HseTheme.yellow),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: HseTheme.cardDark,
-              borderRadius: BorderRadius.circular(HseTheme.borderRadiusSm),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.calendar_today_rounded,
-                    color: HseTheme.textMuted, size: 14),
-                SizedBox(width: 6),
-                Text('14 Jun 2026',
-                    style: TextStyle(
-                        color: HseTheme.textSecondary, fontSize: 12)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          const CircleAvatar(
-              radius: 18,
-              backgroundColor: HseTheme.orange,
-              child: Icon(Icons.person, color: Colors.white, size: 20)),
-        ],
-      ),
-    );
-  }
+        ),
+        const SizedBox(width: 12),
+        CircleAvatar(
+            radius: 18,
+            backgroundColor: ctx.accentOrange,
+            child: const Icon(Icons.person, color: Colors.white, size: 20)),
+      ],
+    ),
+  );
 }
 
 class _HeaderBadge extends StatelessWidget {
@@ -225,7 +241,7 @@ class _HeaderBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(HseTheme.borderRadiusSm),
+        borderRadius: BorderRadius.circular(6.0),
         border: Border.all(color: color.withValues(alpha: 0.3), width: 0.5),
       ),
       child: Row(
@@ -254,22 +270,23 @@ class _KpiRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    final ctx = context;
+    return Row(
       children: [
         Expanded(
           child: _KpiCard(
               title: 'Índice Seguridad LTI',
               value: '98%',
-              color: HseTheme.green,
+              color: ctx.successGreen,
               icon: Icons.verified_rounded,
               subtitle: 'Meta 95%'),
         ),
-        SizedBox(width: 14),
+        const SizedBox(width: 14),
         Expanded(
           child: _KpiCard(
               title: 'Peligros Detectados',
               value: '3',
-              color: HseTheme.yellow,
+              color: ctx.warningYellow,
               icon: Icons.warning_rounded,
               subtitle: 'Por gestionar'),
         ),
@@ -278,7 +295,7 @@ class _KpiRow extends StatelessWidget {
           child: _KpiCard(
               title: 'Incidentes Activos',
               value: '0',
-              color: HseTheme.red,
+              color: ctx.errorRed,
               icon: Icons.error_outline_rounded,
               subtitle: 'Sin novedades'),
         ),
@@ -304,9 +321,10 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: HseTheme.cardDecoration(),
+      decoration: ctx.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -314,7 +332,7 @@ class _KpiCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(6),
-                decoration: HseTheme.iconContainer(color),
+                decoration: ctx.iconContainer(color),
                 child: Icon(icon, color: color, size: 18),
               ),
               const Spacer(),
@@ -328,10 +346,10 @@ class _KpiCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(title, style: HseTheme.headingSm),
+          Text(title, style: ctx.headingSm),
           const SizedBox(height: 4),
           Text(subtitle,
-              style: const TextStyle(color: HseTheme.textMuted, fontSize: 11)),
+              style: TextStyle(color: ctx.textMuted, fontSize: 11)),
         ],
       ),
     );
@@ -346,21 +364,22 @@ class _RiskAreasRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    final ctx = context;
+    return Row(
       children: [
         Expanded(
           child: _RiskAreaCard(
               title: 'Apoyo Operacional a Planta',
               status: 'Alerta Preventiva',
-              statusColor: HseTheme.yellow,
+              statusColor: ctx.warningYellow,
               icon: Icons.factory_rounded),
         ),
-        SizedBox(width: 14),
+        const SizedBox(width: 14),
         Expanded(
           child: _RiskAreaCard(
               title: 'Planta Nanofiltración',
               status: 'Operación Segura',
-              statusColor: HseTheme.green,
+              statusColor: ctx.successGreen,
               icon: Icons.water_drop_rounded),
         ),
         SizedBox(width: 14),
@@ -368,7 +387,7 @@ class _RiskAreasRow extends StatelessWidget {
           child: _RiskAreaCard(
               title: 'Termofusión HDPE\ny Encarpertad de Pozas',
               status: 'Monitoreo Preventivo',
-              statusColor: HseTheme.orange,
+              statusColor: ctx.accentOrange,
               icon: Icons.construction_rounded),
         ),
       ],
@@ -391,20 +410,21 @@ class _RiskAreaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: HseTheme.cardDark,
-        borderRadius: BorderRadius.circular(HseTheme.borderRadiusLg),
+        color: ctx.surfaceCard,
+        borderRadius: BorderRadius.circular(14.0),
         border: Border.all(
             color: statusColor.withValues(alpha: 0.3), width: 0.5),
-        boxShadow: HseTheme.defaultCardShadow,
+        boxShadow: ctx.cardShadow,
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: HseTheme.iconContainer(statusColor, radius: 10),
+            decoration: ctx.iconContainer(statusColor, radius: 10),
             child: Icon(icon, color: statusColor, size: 24),
           ),
           const SizedBox(width: 14),
@@ -412,7 +432,7 @@ class _RiskAreaCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: HseTheme.headingSm),
+                Text(title, style: ctx.headingSm),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -456,23 +476,24 @@ class _TrendChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: HseTheme.cardDecoration(),
+      decoration: ctx.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.trending_up_rounded,
-                  color: HseTheme.green, size: 20),
+              Icon(Icons.trending_up_rounded,
+                  color: ctx.successGreen, size: 20),
               const SizedBox(width: 8),
-              const Text('Evolución del Riesgo Mensual',
-                  style: HseTheme.headingMd),
+              Text('Evolución del Riesgo Mensual',
+                  style: ctx.headingMd),
               const Spacer(),
-              _ChartLegend(color: HseTheme.green, label: 'Controlado'),
+              _ChartLegend(color: ctx.successGreen, label: 'Controlado'),
               const SizedBox(width: 12),
-              _ChartLegend(color: HseTheme.yellow, label: 'En riesgo'),
+              _ChartLegend(color: ctx.warningYellow, label: 'En riesgo'),
             ],
           ),
           const SizedBox(height: 16),
@@ -506,6 +527,7 @@ class _ChartLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -517,8 +539,8 @@ class _ChartLegend extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 4),
         Text(label,
-            style: const TextStyle(
-                color: HseTheme.textMuted, fontSize: 11)),
+            style: TextStyle(
+                color: ctx.textMuted, fontSize: 11)),
       ],
     );
   }
@@ -530,9 +552,10 @@ class _MonthLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Text(label,
-        style: const TextStyle(
-            color: HseTheme.textMuted, fontSize: 10));
+        style: TextStyle(
+            color: ctx.textMuted, fontSize: 10));
   }
 }
 
@@ -543,6 +566,8 @@ class _TrendChartPainter extends CustomPainter {
     final h = size.height;
     final data = [65.0, 58, 72, 68, 80, 75, 85, 78, 90, 82, 88, 84];
     final data2 = [50.0, 42, 55, 48, 60, 52, 62, 56, 68, 58, 65, 60];
+    const orange = Color(0xFFFF6B35);
+    const green = Color(0xFF00E676);
 
     final paintFill = Paint()
       ..shader = const LinearGradient(
@@ -552,7 +577,7 @@ class _TrendChartPainter extends CustomPainter {
       ).createShader(Rect.fromLTWH(0, 0, w, h));
 
     final paintLine = Paint()
-      ..color = HseTheme.orange
+      ..color = orange
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -565,16 +590,16 @@ class _TrendChartPainter extends CustomPainter {
       ).createShader(Rect.fromLTWH(0, 0, w, h));
 
     final paintLine2 = Paint()
-      ..color = HseTheme.green
+      ..color = green
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final dotPaint = Paint()
-      ..color = HseTheme.orange
+      ..color = orange
       ..style = PaintingStyle.fill;
     final dotPaint2 = Paint()
-      ..color = HseTheme.green
+      ..color = green
       ..style = PaintingStyle.fill;
 
     final path = Path();
@@ -583,6 +608,8 @@ class _TrendChartPainter extends CustomPainter {
     const paddingTop = 10.0;
     const paddingBottom = 10.0;
     final range = 100.0;
+
+    const gridPaintColor = Color(0xFF1E3456);
 
     for (int i = 0; i < data.length; i++) {
       final x = i * stepX;
@@ -638,7 +665,7 @@ class _TrendChartPainter extends CustomPainter {
     }
 
     final gridPaint = Paint()
-      ..color = HseTheme.cardBorder.withValues(alpha: 0.3)
+      ..color = gridPaintColor.withValues(alpha: 0.3)
       ..strokeWidth = 0.5;
     for (int i = 0; i < 4; i++) {
       final y =
@@ -659,37 +686,38 @@ class _MobileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-            bottom: BorderSide(color: HseTheme.divider, width: 0.5)),
+            bottom: BorderSide(color: ctx.dividerColor, width: 0.5)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.assessment_rounded,
-              color: HseTheme.orange, size: 22),
+          Icon(Icons.assessment_rounded,
+              color: ctx.accentOrange, size: 22),
           const SizedBox(width: 8),
-          const Text('ProReport',
+          Text('ProReport',
               style: TextStyle(
-                  color: HseTheme.textPrimary,
+                  color: ctx.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.bold)),
           const Spacer(),
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: HseTheme.yellow.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(HseTheme.borderRadiusSm),
+              color: ctx.warningYellow.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6.0),
             ),
-            child: const Icon(Icons.notifications_none_rounded,
-                color: HseTheme.yellow, size: 18),
+            child: Icon(Icons.notifications_none_rounded,
+                color: ctx.warningYellow, size: 18),
           ),
           const SizedBox(width: 8),
-          const CircleAvatar(
+          CircleAvatar(
               radius: 14,
-              backgroundColor: HseTheme.orange,
-              child: Icon(Icons.person, color: Colors.white, size: 14)),
+              backgroundColor: ctx.accentOrange,
+              child: const Icon(Icons.person, color: Colors.white, size: 14)),
         ],
       ),
     );
@@ -701,13 +729,14 @@ class _MobileKpiCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Row(
       children: [
         Expanded(
           child: _CompactKpiCard(
               title: 'Índice Seguridad',
               value: '98%',
-              color: HseTheme.green,
+              color: ctx.successGreen,
               icon: Icons.verified_rounded),
         ),
         const SizedBox(width: 10),
@@ -715,7 +744,7 @@ class _MobileKpiCards extends StatelessWidget {
           child: _CompactKpiCard(
               title: 'Peligros',
               value: '3',
-              color: HseTheme.yellow,
+              color: ctx.warningYellow,
               icon: Icons.warning_rounded),
         ),
         const SizedBox(width: 10),
@@ -723,7 +752,7 @@ class _MobileKpiCards extends StatelessWidget {
           child: _CompactKpiCard(
               title: 'Incidentes',
               value: '0',
-              color: HseTheme.red,
+              color: ctx.errorRed,
               icon: Icons.error_outline_rounded),
         ),
       ],
@@ -746,18 +775,19 @@ class _CompactKpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: HseTheme.cardDark,
-        borderRadius: BorderRadius.circular(HseTheme.borderRadiusMd),
-        border: Border.all(color: HseTheme.cardBorder, width: 0.5),
+        color: ctx.surfaceCard,
+        borderRadius: BorderRadius.circular(10.0),
+        border: Border.all(color: ctx.borderColor, width: 0.5),
       ),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(6),
-            decoration: HseTheme.iconContainer(color),
+            decoration: ctx.iconContainer(color),
             child: Icon(icon, color: color, size: 16),
           ),
           const SizedBox(height: 6),
@@ -771,8 +801,8 @@ class _CompactKpiCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             title,
-            style: const TextStyle(
-                color: HseTheme.textMuted, fontSize: 9),
+            style: TextStyle(
+                color: ctx.textMuted, fontSize: 9),
             textAlign: TextAlign.center,
           ),
         ],
@@ -786,24 +816,25 @@ class _MobileRiskAreas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Column(
       children: [
         _CompactRiskCard(
             title: 'Apoyo Operacional a Planta',
             status: 'Alerta Preventiva',
-            statusColor: HseTheme.yellow,
+            statusColor: ctx.warningYellow,
             icon: Icons.factory_rounded),
         const SizedBox(height: 8),
         _CompactRiskCard(
             title: 'Planta Nanofiltración',
             status: 'Operación Segura',
-            statusColor: HseTheme.green,
+            statusColor: ctx.successGreen,
             icon: Icons.water_drop_rounded),
         const SizedBox(height: 8),
         _CompactRiskCard(
             title: 'Termofusión HDPE y Encarpertad de Pozas',
             status: 'Monitoreo Preventivo',
-            statusColor: HseTheme.orange,
+            statusColor: ctx.accentOrange,
             icon: Icons.construction_rounded),
       ],
     );
@@ -825,11 +856,12 @@ class _CompactRiskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: HseTheme.cardDark,
-        borderRadius: BorderRadius.circular(HseTheme.borderRadiusMd),
+        color: ctx.surfaceCard,
+        borderRadius: BorderRadius.circular(10.0),
         border: Border.all(
             color: statusColor.withValues(alpha: 0.2), width: 0.5),
       ),
@@ -837,7 +869,7 @@ class _CompactRiskCard extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: HseTheme.iconContainer(statusColor, radius: 8),
+            decoration: ctx.iconContainer(statusColor, radius: 8),
             child: Icon(icon, color: statusColor, size: 20),
           ),
           const SizedBox(width: 12),
@@ -845,7 +877,7 @@ class _CompactRiskCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: HseTheme.headingSm),
+                Text(title, style: ctx.headingSm),
                 const SizedBox(height: 3),
                 Row(
                   children: [
@@ -868,8 +900,8 @@ class _CompactRiskCard extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right,
-              color: HseTheme.textMuted, size: 18),
+          Icon(Icons.chevron_right,
+              color: ctx.textMuted, size: 18),
         ],
       ),
     );
@@ -881,46 +913,51 @@ class _MobileReportabilidadMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Container(
       decoration: BoxDecoration(
-        color: HseTheme.cardDark,
-        borderRadius: BorderRadius.circular(HseTheme.borderRadiusLg),
-        border: Border.all(color: HseTheme.cardBorder, width: 0.5),
+        color: ctx.surfaceCard,
+        borderRadius: BorderRadius.circular(14.0),
+        border: Border.all(color: ctx.borderColor, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(
-                  bottom: BorderSide(color: HseTheme.divider, width: 0.5)),
+                  bottom: BorderSide(color: ctx.dividerColor, width: 0.5)),
             ),
-            child: const Row(
+            child: Row(
               children: [
                 Icon(Icons.menu_book_rounded,
-                    color: HseTheme.orange, size: 18),
-                SizedBox(width: 8),
+                    color: ctx.accentOrange, size: 18),
+                const SizedBox(width: 8),
                 Text('Reportabilidad',
-                    style: HseTheme.headingMd),
-                Spacer(),
+                    style: ctx.headingMd),
+                const Spacer(),
                 Icon(Icons.expand_less,
-                    color: HseTheme.textMuted, size: 20),
+                    color: ctx.textMuted, size: 20),
               ],
             ),
           ),
           _MobileSubItem(
               icon: Icons.warning_amber_rounded,
               label: 'Detecciones de Peligro',
-              color: HseTheme.yellow),
+              color: ctx.warningYellow,
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const DeteccionPeligroScreen()))),
           _MobileSubItem(
               icon: Icons.route_rounded,
               label: 'Caminatas de Seguridad',
-              color: HseTheme.green),
+              color: ctx.successGreen),
           _MobileSubItem(
               icon: Icons.assignment_rounded,
               label: 'Solicitud de Levantamiento de Incidentes',
-              color: HseTheme.orange,
+              color: ctx.accentOrange,
               showBorder: false,
               onTap: () => Navigator.push(
                   context,
@@ -930,7 +967,7 @@ class _MobileReportabilidadMenu extends StatelessWidget {
           _MobileSubItem(
               icon: Icons.people_rounded,
               label: 'Gestionar Personal',
-              color: HseTheme.green,
+              color: ctx.successGreen,
               showBorder: false,
               onTap: () => Navigator.push(
                   context,
@@ -959,31 +996,32 @@ class _MobileSubItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return PressableTile(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: showBorder
-            ? const BoxDecoration(
+            ? BoxDecoration(
                 border: Border(
                     bottom:
-                        BorderSide(color: HseTheme.divider, width: 0.5)))
+                        BorderSide(color: ctx.dividerColor, width: 0.5)))
             : null,
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: HseTheme.iconContainer(color, radius: 8),
+              decoration: ctx.iconContainer(color, radius: 8),
               child: Icon(icon, color: color, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(label,
-                  style: const TextStyle(
-                      color: HseTheme.textSecondary, fontSize: 13)),
+                  style: TextStyle(
+                      color: ctx.textSecondary, fontSize: 13)),
             ),
             Icon(Icons.arrow_forward_ios_rounded,
-                color: HseTheme.textMuted, size: 12),
+                color: ctx.textMuted, size: 12),
           ],
         ),
       ),

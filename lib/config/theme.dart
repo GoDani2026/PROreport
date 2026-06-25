@@ -1,18 +1,31 @@
 import 'package:flutter/material.dart';
 
+/// Tema unificado PROreport.
+/// Define los colores base y estilos de tema (claro/oscuro).
 class AppTheme {
-  // Colores principales - Tema "Híbrido de Seguridad"
-  static const Color primaryDark = Color(0xFF0D1B2A); // Azul marino oscuro
-  static const Color primaryBlue = Color(0xFF1B3A5C); // Azul marino
-  static const Color accentOrange = Color(0xFFFF6B35); // Naranja de seguridad
+  // ── Colores base (estáticos) ────────────────────────────────
+  static const Color primaryDark = Color(0xFF0D1B2A);
+  static const Color primaryBlue = Color(0xFF1B3A5C);
+  static const Color accentOrange = Color(0xFFFF6B35);
   static const Color accentOrangeLight = Color(0xFFFF8C5A);
   static const Color surfaceColor = Color(0xFFF5F7FA);
   static const Color cardColor = Colors.white;
   static const Color textPrimary = Color(0xFF1A1A2E);
   static const Color textSecondary = Color(0xFF6C757D);
-  static const Color successGreen = Color(0xFF28A745);
-  static const Color errorRed = Color(0xFFDC3545);
+  static const Color successGreen = Color(0xFF00E676);
+  static const Color errorRed = Color(0xFFFF5252);
   static const Color warningYellow = Color(0xFFFFC107);
+
+  // ── Colores para pantallas con fondo oscuro estático ──────
+  static const Color bgDark = Color(0xFF0A1628);
+  static const Color sidebarDark = Color(0xFF0D1B2A);
+  static const Color cardDark = Color(0xFF132336);
+  static const Color cardBorder = Color(0xFF1E3456);
+  static const Color divider = Color(0xFF1E3456);
+  static const Color green = Color(0xFF00E676);
+  static const Color yellow = Color(0xFFFFC107);
+  static const Color red = Color(0xFFFF5252);
+  static const Color orange = Color(0xFFFF6B35);
 
   static ThemeData get darkTheme {
     return ThemeData(

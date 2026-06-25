@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../config/theme.dart';
-import '../config/hse_theme.dart';
+import '../config/theme_context_ext.dart';
 import '../providers/auth_provider.dart';
 import 'home_screen.dart';
 
@@ -31,6 +30,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
+    final snackColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF00E676)
+        : const Color(0xFF00E676);
+    final snackErrorColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFFF5252)
+        : const Color(0xFFFF5252);
 
     try {
       final auth = context.read<AuthProvider>();
@@ -41,10 +46,10 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
+            SnackBar(
+              content: const Text(
                   'Registro exitoso. Revisa tu correo para confirmar.'),
-              backgroundColor: AppTheme.successGreen,
+              backgroundColor: snackColor,
             ),
           );
         }
@@ -65,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
-            backgroundColor: AppTheme.errorRed,
+              backgroundColor: snackErrorColor,
           ),
         );
       }
@@ -76,8 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ctx = context;
     return Scaffold(
-      backgroundColor: HseTheme.bgDark,
+      backgroundColor: ctx.surfaceBg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -90,15 +96,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: HseTheme.orange.withValues(alpha: 0.08),
+                      color: ctx.accentOrange.withValues(alpha: 0.08),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: HseTheme.orange.withValues(alpha: 0.2),
+                        color: ctx.accentOrange.withValues(alpha: 0.2),
                         width: 1.5,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: HseTheme.orange.withValues(alpha: 0.15),
+                          color: ctx.accentOrange.withValues(alpha: 0.15),
                           blurRadius: 20,
                           spreadRadius: 2,
                         ),
@@ -113,33 +119,33 @@ class _LoginScreenState extends State<LoginScreen> {
                         errorBuilder: (context, error, stackTrace) => Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: HseTheme.orange.withValues(alpha: 0.1),
+                            color: ctx.accentOrange.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.shield_outlined,
                             size: 64,
-                            color: AppTheme.accentOrange,
+                            color: ctx.accentOrange,
                           ),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     'PROreport',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.accentOrange,
+                      color: ctx.accentOrange,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Reporte de Incidentes HSE',
                     style: TextStyle(
                       fontSize: 16,
-                      color: HseTheme.textSecondary,
+                      color: ctx.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -147,10 +153,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: HseTheme.textPrimary),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: ctx.textPrimary),
+                    decoration: InputDecoration(
                       labelText: 'Correo electrónico',
-                      prefixIcon: Icon(Icons.email_outlined),
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      filled: true,
+                      fillColor: ctx.surfaceInput,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ctx.borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ctx.borderColor),
+                      ),
+                      labelStyle: TextStyle(color: ctx.textSecondary),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -167,16 +184,27 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: const TextStyle(color: HseTheme.textPrimary),
+                    style: TextStyle(color: ctx.textPrimary),
                     decoration: InputDecoration(
                       labelText: 'Contraseña',
                       prefixIcon: const Icon(Icons.lock_outlined),
+                      filled: true,
+                      fillColor: ctx.surfaceInput,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ctx.borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ctx.borderColor),
+                      ),
+                      labelStyle: TextStyle(color: ctx.textSecondary),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword
                               ? Icons.visibility_off
                               : Icons.visibility,
-                          color: HseTheme.textSecondary,
+                          color: ctx.textSecondary,
                         ),
                         onPressed: () {
                           setState(
@@ -207,10 +235,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         );
                       },
-                      child: const Text(
+                      child: Text(
                         '¿Olvidaste tu contraseña?',
                         style: TextStyle(
-                          color: HseTheme.orange,
+                          color: ctx.accentOrange,
                           fontSize: 13,
                         ),
                       ),
@@ -224,7 +252,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _submit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: HseTheme.orange,
+                        backgroundColor: ctx.accentOrange,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -253,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _isSignUp
                           ? '¿Ya tienes cuenta? Inicia sesión'
                           : '¿No tienes cuenta? Regístrate',
-                      style: const TextStyle(color: HseTheme.textSecondary),
+                      style: TextStyle(color: ctx.textSecondary),
                     ),
                   ),
                 ],
