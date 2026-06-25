@@ -1,22 +1,23 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class SupabaseConfig {
-  // Project URL and publishable key.
-  // These values are safe to expose in client apps.
-  static const String supabaseUrl = 'https://inleckebqssizgeovgov.supabase.co';
-  static const String supabasePublishableKey =
-      'sb_publishable_6XdOZiVUVFL1qDTOQfulbQ_Sta0McXC';
+  /// Project URL — se carga desde .env
+  static String get supabaseUrl =>
+      dotenv.env['SUPABASE_URL'] ?? '';
 
-  // Service Role Key (necesaria solo para scripts/administración).
-  // NUNCA uses esta clave en una app de cliente.
-  // Para producción, reemplázala por una variable de entorno segura.
-  static const String supabaseServiceRoleKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlubGVja2VicXNzaXpnZW92Z292Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTMwOTEwNiwiZXhwIjoyMDk2ODg1MTA2fQ._UuVsouETXVscinOQHoG-euOptapwyqE6-LHS1Q6P1E';
+  /// Publishable key (segura para exponer en cliente Flutter) — .env
+  static String get supabasePublishableKey =>
+      dotenv.env['SUPABASE_PUBLISHABLE_KEY'] ?? '';
 
-  // Bucket names
-  static const String storageBucket = 'incidentes_storage';
+  /// Storage bucket name — .env
+  static String get storageBucket =>
+      dotenv.env['STORAGE_BUCKET'] ?? 'documentos_hse';
 
-  // Table names
+  // Table names (constantes de aplicación, no sensibles)
   static const String tableIncidentes = 'incidentes';
   static const String tableTiposIncidente = 'tipos_incidente';
   static const String tableAreas = 'areas';
   static const String tablePerfiles = 'perfiles';
+  static const String tableDocumentosHse = 'documentos_hse';
+  static const String tableCumplimiento = 'cumplimiento';
 }

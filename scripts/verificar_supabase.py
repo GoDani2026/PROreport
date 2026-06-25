@@ -11,12 +11,16 @@ import sys
 import os
 from datetime import datetime
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
+import env as _env
+_env.load_env()
+
 from supabase import create_client, Client
 
 # ─── CONFIGURACIÓN ───────────────────────────────────────────────────────────
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://inleckebqssizgeovgov.supabase.co")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "TU_SERVICE_ROLE_KEY_AQUI")
-CONTRATO_CODIGO = os.getenv("CONTRATO_CODIGO", "SC-9500014891")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+CONTRATO_CODIGO = os.environ.get("CONTRATO_CODIGO", "")
 CSV_PATH = os.getenv(
     "CSV_PATH",
     os.path.join(os.path.dirname(__file__), "..", "LISTADO OFICIAL CC SC-9500014891 - LISTADO COMPLETO.csv"),
@@ -282,7 +286,7 @@ def main():
     tablas_ok = verificar_tablas(supabase)
     if not all(tablas_ok.values()):
         print("\n❌ Faltan tablas necesarias. Ejecuta la app Flutter para auto-crearlas,")
-        print("   o ejecuta manualmente el SQL del archivo supabase_schema_hse.sql")
+        print("   o ejecuta manualmente el SQL del archivo sql/02_schema_gestion_personal.sql")
         sys.exit(1)
 
     # Verificar conexión

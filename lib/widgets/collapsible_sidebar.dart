@@ -111,7 +111,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: Image.asset(
-                'Logo sL.png',
+                'Logo.png',
                 width: 24,
                 height: 24,
                 fit: BoxFit.contain,

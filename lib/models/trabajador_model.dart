@@ -60,7 +60,7 @@ class Trabajador {
       apellidoMaterno: json['apellido_materno'] as String?,
       cargo: json['cargo'] as String? ?? '',
       nacionalidad: json['nacionalidad'] as String? ?? 'Chilena',
-      vencimientoResidencia: json['vencimiento_residencia'] as String?,
+      vencimientoResidencia: json['fecha_vencimiento_residencia'] as String?,
       sexo: json['sexo'] as String?,
       turno: json['turno'] as String? ?? '',
       estadoTrabajador: json['estado_trabajador'] as String? ?? 'ACTIVO',
@@ -83,7 +83,7 @@ class Trabajador {
       'apellido_materno': apellidoMaterno,
       'cargo': cargo,
       'nacionalidad': nacionalidad,
-      'vencimiento_residencia': vencimientoResidencia,
+      'fecha_vencimiento_residencia': vencimientoResidencia,
       'sexo': sexo,
       'turno': turno,
       'estado_trabajador': estadoTrabajador,
@@ -161,8 +161,26 @@ class CumplimientoTrabajador {
 
   /// Indica si este requisito permite selección de fecha de vencimiento
   /// basado en el estado actual.
-  bool get permiteFechaVencimiento =>
-      valorEstado != 'SI' && valorEstado != 'N/A';
+  bool get permiteFechaVencimiento => valorEstado != 'N/A';
+
+  /// Crea un CumplimientoTrabajador desde valores parseados de CSV.
+  factory CumplimientoTrabajador.fromCsvValues({
+    required int trabajadorId,
+    required int requisitoId,
+    required String valorEstado,
+    String? fechaVencimiento,
+    String? documentoUrl,
+  }) {
+    return CumplimientoTrabajador(
+      trabajadorId: trabajadorId,
+      requisitoId: requisitoId,
+      valorEstado: valorEstado,
+      fechaVencimiento: fechaVencimiento != null && fechaVencimiento.isNotEmpty
+          ? DateTime.tryParse(fechaVencimiento)
+          : null,
+      documentoUrl: documentoUrl,
+    );
+  }
 
   factory CumplimientoTrabajador.fromJson(Map<String, dynamic> json) {
     return CumplimientoTrabajador(

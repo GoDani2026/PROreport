@@ -87,23 +87,40 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'Logo sL.png',
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: HseTheme.orange.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: HseTheme.orange.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: HseTheme.orange.withValues(alpha: 0.2),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: HseTheme.orange.withValues(alpha: 0.15),
+                          blurRadius: 20,
+                          spreadRadius: 2,
                         ),
-                        child: const Icon(
-                          Icons.shield_outlined,
-                          size: 64,
-                          color: AppTheme.accentOrange,
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'Logo.png',
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: HseTheme.orange.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.shield_outlined,
+                            size: 64,
+                            color: AppTheme.accentOrange,
+                          ),
                         ),
                       ),
                     ),

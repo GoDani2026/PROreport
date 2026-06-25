@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'config/theme.dart';
 import 'providers/incidente_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/cumplimiento_provider.dart';
 import 'services/supabase_setup_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
 
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
@@ -39,6 +43,9 @@ class ProReportApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => AuthProvider(client),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => CumplimientoProvider(client),
         ),
       ],
       child: MaterialApp(

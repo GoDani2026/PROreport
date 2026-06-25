@@ -1,6 +1,7 @@
 -- ============================================================
--- HSE - Esquema de Base de Datos Supabase
--- Sistema de Gestión HSE para Contratista Minera SQM
+-- PROreport - 02. Esquema de Gestión de Personal HSE
+-- Consolidado: estados normalizados VIGENTE/VENCIDO/N/A
+-- cumplimiento_trabajadores con usuario_registra_id → perfiles
 -- ============================================================
 
 -- 1. Tabla: trabajadores (Datos fijos del personal)
@@ -9,16 +10,18 @@ CREATE TABLE IF NOT EXISTS trabajadores (
   rut text UNIQUE NOT NULL,
   nombre text NOT NULL,
   apellido_paterno text NOT NULL,
-  apellido_materno text,
-  cargo text NOT NULL,
+  apellido_materno text DEFAULT '',
+  cargo text DEFAULT '',
   nacionalidad text DEFAULT 'Chilena',
-  vencimiento_residencia text,
-  sexo text CHECK (sexo IN ('M', 'F', 'Otro')),
-  turno text NOT NULL,
+  fecha_vencimiento_residencia text DEFAULT '',
+  sexo text DEFAULT '',
+  turno text DEFAULT '',
+  empresa text DEFAULT '',
+  contrato_codigo text DEFAULT 'SC-9500014891',
   estado_trabajador text NOT NULL DEFAULT 'ACTIVO' CHECK (estado_trabajador IN ('ACTIVO', 'DESVINCULADO', 'LICENCIA')),
-  contrato_codigo text NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now()
+  updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp DEFAULT NULL
 );
 
 -- 2. Tabla: requisitos_hse (Catálogo dinámico de documentos/exámenes)
@@ -29,35 +32,37 @@ CREATE TABLE IF NOT EXISTS requisitos_hse (
 );
 
 -- Poblar catálogo con los 12 requisitos exactos del Excel
-INSERT INTO requisitos_hse (nombre_requisito, requiere_vencimiento) VALUES
-  ('Exámenes Ocupacionales / Pre-Ocupacionales (AG/AF)', true),
-  ('Examen Alcohol y drogas', true),
-  ('Examen Psicosensometrico', true),
-  ('Fecha Vencimiento Inducción SQM', true),
-  ('Protocolo SQM (ODI)', false),
-  ('CTTA(ODI)', false),
-  ('Certificación (Soldadores, electricos, riggers, op.Maquinaria, etc)', false),
-  ('Licencia Interna SQM', false),
-  ('Difusión Procedimientos', false),
-  ('Difusión Plan y Sub Planes SQM', false),
-  ('Difusión Plan y Sub Planes Cttas', false),
-  ('Difusión HDS', false)
-ON CONFLICT DO NOTHING;
+INSERT INTO requisitos_hse (id, nombre_requisito, requiere_vencimiento) VALUES
+  (1, 'Exámenes Ocupacionales / Pre-Ocupacionales (AG/AF)', true),
+  (2, 'Examen Alcohol y drogas', true),
+  (3, 'Examen Psicosensometrico', true),
+  (4, 'Fecha Vencimiento Inducción SQM', true),
+  (5, 'Protocolo SQM (ODI)', false),
+  (6, 'CTTA(ODI)', false),
+  (7, 'Certificación (Soldadores, electricos, riggers, op.Maquinaria, etc)', false),
+  (8, 'Licencia Interna SQM', false),
+  (9, 'Difusión Procedimientos', false),
+  (10, 'Difusión Plan y Sub Planes SQM', false),
+  (11, 'Difusión Plan y Sub Planes Cttas', false),
+  (12, 'Difusión HDS', false)
+ON CONFLICT (id) DO NOTHING;
 
--- 3. Tabla: cumplimiento_trabajadores (Matriz vertical de estados y fechas)
+-- 3. Tabla: cumplimiento_trabajadores (Matriz vertical con estados normalizados)
 CREATE TABLE IF NOT EXISTS cumplimiento_trabajadores (
   id serial PRIMARY KEY,
   trabajador_id integer NOT NULL REFERENCES trabajadores(id) ON DELETE CASCADE,
   requisito_id integer NOT NULL REFERENCES requisitos_hse(id) ON DELETE RESTRICT,
-  valor_estado text NOT NULL CHECK (valor_estado IN ('VIGENTE', 'SI', 'NO', 'N/A', 'VENCIDO')),
+  valor_estado text NOT NULL DEFAULT 'N/A' CHECK (valor_estado IN ('VIGENTE', 'VENCIDO', 'N/A')),
   fecha_vencimiento date,
   documento_url text,
+  usuario_registra_id uuid REFERENCES perfiles(id),
   updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp DEFAULT NULL,
   UNIQUE(trabajador_id, requisito_id)
 );
 
 -- ============================================================
--- TRIGGER: Actualizar updated_at automáticamente en trabajadores
+-- TRIGGERS: Actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION public.handle_updated_at_trabajadores()
 RETURNS trigger AS $$
 BEGIN
@@ -71,7 +76,6 @@ CREATE OR REPLACE TRIGGER on_trabajadores_updated
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at_trabajadores();
 
--- Trigger para cumplimiento_trabajadores
 CREATE OR REPLACE FUNCTION public.handle_updated_at_cumplimiento()
 RETURNS trigger AS $$
 BEGIN
@@ -86,8 +90,7 @@ CREATE OR REPLACE TRIGGER on_cumplimiento_updated
   EXECUTE FUNCTION public.handle_updated_at_cumplimiento();
 
 -- ============================================================
--- POLÍTICAS DE SEGURIDAD (Row Level Security)
--- Habilitar RLS en las nuevas tablas
+-- RLS: Row Level Security
 ALTER TABLE trabajadores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requisitos_hse ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cumplimiento_trabajadores ENABLE ROW LEVEL SECURITY;
@@ -95,80 +98,35 @@ ALTER TABLE cumplimiento_trabajadores ENABLE ROW LEVEL SECURITY;
 -- Políticas para trabajadores
 DROP POLICY IF EXISTS "Usuarios autenticados pueden ver trabajadores" ON trabajadores;
 CREATE POLICY "Usuarios autenticados pueden ver trabajadores"
-  ON trabajadores FOR SELECT
-  TO authenticated
-  USING (true);
+  ON trabajadores FOR SELECT TO authenticated USING (true);
 
-DROP POLICY IF EXISTS "Usuarios autenticados pueden insertar trabajadores" ON trabajadores;
-CREATE POLICY "Usuarios autenticados pueden insertar trabajadores"
-  ON trabajadores FOR INSERT
-  TO authenticated
-  WITH CHECK (true);
+DROP POLICY IF EXISTS "Solo admin/supervisor puede modificar trabajadores" ON trabajadores;
+CREATE POLICY "Solo admin/supervisor puede modificar trabajadores"
+  ON trabajadores FOR INSERT TO authenticated
+  WITH CHECK (EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol IN ('admin', 'supervisor')));
 
-DROP POLICY IF EXISTS "Usuarios autenticados pueden actualizar trabajadores" ON trabajadores;
-CREATE POLICY "Usuarios autenticados pueden actualizar trabajadores"
-  ON trabajadores FOR UPDATE
-  TO authenticated
-  USING (true);
-
-DROP POLICY IF EXISTS "Usuarios autenticados pueden eliminar trabajadores" ON trabajadores;
-CREATE POLICY "Usuarios autenticados pueden eliminar trabajadores"
-  ON trabajadores FOR DELETE
-  TO authenticated
-  USING (true);
+CREATE POLICY "Solo admin/supervisor puede actualizar trabajadores"
+  ON trabajadores FOR UPDATE TO authenticated
+  USING (EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol IN ('admin', 'supervisor')));
 
 -- Políticas para requisitos_hse (catálogo de solo lectura)
 DROP POLICY IF EXISTS "Requisitos HSE visibles para usuarios autenticados" ON requisitos_hse;
 CREATE POLICY "Requisitos HSE visibles para usuarios autenticados"
-  ON requisitos_hse FOR SELECT
-  TO authenticated
-  USING (true);
+  ON requisitos_hse FOR SELECT TO authenticated USING (true);
 
 -- Políticas para cumplimiento_trabajadores
 DROP POLICY IF EXISTS "Usuarios autenticados pueden ver cumplimiento" ON cumplimiento_trabajadores;
 CREATE POLICY "Usuarios autenticados pueden ver cumplimiento"
-  ON cumplimiento_trabajadores FOR SELECT
-  TO authenticated
-  USING (true);
+  ON cumplimiento_trabajadores FOR SELECT TO authenticated USING (true);
 
-DROP POLICY IF EXISTS "Usuarios autenticados pueden insertar cumplimiento" ON cumplimiento_trabajadores;
-CREATE POLICY "Usuarios autenticados pueden insertar cumplimiento"
-  ON cumplimiento_trabajadores FOR INSERT
-  TO authenticated
-  WITH CHECK (true);
+DROP POLICY IF EXISTS "Solo admin/supervisor modifica cumplimiento" ON cumplimiento_trabajadores;
+CREATE POLICY "Solo admin/supervisor modifica cumplimiento"
+  ON cumplimiento_trabajadores FOR INSERT TO authenticated
+  WITH CHECK (EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol IN ('admin', 'supervisor')));
 
-DROP POLICY IF EXISTS "Usuarios autenticados pueden actualizar cumplimiento" ON cumplimiento_trabajadores;
-CREATE POLICY "Usuarios autenticados pueden actualizar cumplimiento"
-  ON cumplimiento_trabajadores FOR UPDATE
-  TO authenticated
-  USING (true);
-
-DROP POLICY IF EXISTS "Usuarios autenticados pueden eliminar cumplimiento" ON cumplimiento_trabajadores;
-CREATE POLICY "Usuarios autenticados pueden eliminar cumplimiento"
-  ON cumplimiento_trabajadores FOR DELETE
-  TO authenticated
-  USING (true);
-
--- Política para acceso público anon (para debugging en desarrollo)
-DROP POLICY IF EXISTS "Acceso anon a trabajadores" ON trabajadores;
-CREATE POLICY "Acceso anon a trabajadores"
-  ON trabajadores FOR ALL
-  TO anon
-  USING (true)
-  WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Acceso anon a requisitos_hse" ON requisitos_hse;
-CREATE POLICY "Acceso anon a requisitos_hse"
-  ON requisitos_hse FOR SELECT
-  TO anon
-  USING (true);
-
-DROP POLICY IF EXISTS "Acceso anon a cumplimiento_trabajadores" ON cumplimiento_trabajadores;
-CREATE POLICY "Acceso anon a cumplimiento_trabajadores"
-  ON cumplimiento_trabajadores FOR ALL
-  TO anon
-  USING (true)
-  WITH CHECK (true);
+CREATE POLICY "Solo admin/supervisor actualiza cumplimiento"
+  ON cumplimiento_trabajadores FOR UPDATE TO authenticated
+  USING (EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol IN ('admin', 'supervisor')));
 
 -- ============================================================
 -- ÍNDICES para optimizar consultas frecuentes
@@ -208,7 +166,7 @@ BEGIN
     t.estado_trabajador,
     r.id as requisito_id,
     r.nombre_requisito,
-    ct.valor_estado,
+    COALESCE(ct.valor_estado, 'N/A') as valor_estado,
     ct.fecha_vencimiento,
     ct.documento_url
   FROM trabajadores t
@@ -216,7 +174,9 @@ BEGIN
   LEFT JOIN cumplimiento_trabajadores ct 
     ON t.id = ct.trabajador_id 
     AND r.id = ct.requisito_id
+    AND ct.deleted_at IS NULL
   WHERE t.id = p_trabajador_id
+    AND t.deleted_at IS NULL
   ORDER BY r.id;
 END;
 $$ LANGUAGE plpgsql STABLE;

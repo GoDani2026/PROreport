@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/trabajador_service.dart';
+import '../services/exceptions.dart';
 import '../widgets/collapsible_sidebar.dart';
 
 // ──────────────────────────────────────────────────────────────
@@ -27,7 +28,7 @@ class EditarTrabajadorScreen extends StatefulWidget {
 }
 
 class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
-  final _supabase = Supabase.instance.client;
+  final _service = TrabajadorService();
   bool _isSaving = false;
 
   // ── Modo edición ──
@@ -64,7 +65,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
   ];
   static const _sexos = ['M', 'F', 'Otro'];
   static const _estados = ['ACTIVO', 'DESVINCULADO', 'LICENCIA'];
-  static const _estadosRequisito = ['VIGENTE', 'SI', 'NO', 'N/A', 'VENCIDO'];
 
   @override
   void initState() {
@@ -96,7 +96,7 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     _rutController.text = t['rut'] ?? '';
     _cargoController.text = t['cargo'] ?? '';
     _nacionalidadController.text = t['nacionalidad'] ?? 'Chilena';
-    _vencimientoResidenciaController.text = t['vencimiento_residencia'] ?? 'PERMANENCIA DEFINITIVA';
+    _vencimientoResidenciaController.text = t['fecha_vencimiento_residencia'] ?? 'PERMANENCIA DEFINITIVA';
     _turnoController.text = t['turno'] ?? '';
     _contratoCodigoController.text = t['contrato_codigo'] ?? '';
     _sexoSeleccionado = _getValidDropdownValue(t['sexo'], _sexos);
@@ -113,7 +113,7 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
       orElse: () => '',
     );
     if (match.isNotEmpty) return match;
-    return null; // Let the UI pick the first item or show "Otra"
+    return null;
   }
 
   void _saveOriginals() {
@@ -131,7 +131,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     }
   }
 
-  /// Add listeners to all controllers for dirty tracking
   void _setupChangeListeners() {
     for (final controller in [
       _nombreController, _apellidoPaternoController, _apellidoMaternoController,
@@ -144,9 +143,12 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
 
   Future<void> _loadRequisitos() async {
     try {
-      final reqs = await _supabase.from('requisitos_hse').select().order('id', ascending: true);
-      final trabajadorId = widget.trabajador['id'];
-      final cumpl = await _supabase.from('cumplimiento_trabajadores').select().eq('trabajador_id', trabajadorId);
+      final trabajadorId = widget.trabajador['id'] as int;
+
+      final cumpl = await _service.fetchCumplimientoTrabajador(trabajadorId);
+      debugPrint('[_loadRequisitos] Cargados ${cumpl.length} registros de cumplimiento para trabajador $trabajadorId');
+
+      final reqs = await _service.fetchRequisitosHSE();
 
       final cumplMap = {for (var c in cumpl) c['requisito_id']: c};
 
@@ -155,11 +157,23 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
         _cumplimiento = _requisitos.map((r) {
           final id = r['id'];
           final existente = cumplMap[id];
+          final requiereVenc = r['requiere_vencimiento'] ?? false;
+
+          final fechaVenc = existente?['fecha_vencimiento'];
+          String valorEstado;
+
+          if (fechaVenc != null && fechaVenc.toString().isNotEmpty) {
+            valorEstado = _calcularEstadoDesdeFecha(fechaVenc.toString());
+          } else {
+            final guardado = existente?['valor_estado'];
+            valorEstado = (guardado != null && guardado.isNotEmpty) ? guardado : (requiereVenc ? 'VIGENTE' : 'N/A');
+          }
+
           return {
             'requisito_id': id,
-            'valor_estado': existente?['valor_estado'] ?? 'N/A',
-            'fecha_vencimiento': existente?['fecha_vencimiento'],
-            'requiere_vencimiento': r['requiere_vencimiento'] ?? false,
+            'valor_estado': valorEstado,
+            'fecha_vencimiento': fechaVenc,
+            'requiere_vencimiento': requiereVenc,
             'nombre': r['nombre_requisito'] ?? '',
           };
         }).toList();
@@ -175,7 +189,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     }
   }
 
-  /// Enter edit mode
   void _enterEditMode() {
     _saveOriginalCumplimiento();
     setState(() {
@@ -184,7 +197,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     });
   }
 
-  /// Cancel edits and restore originals
   void _cancelEdits() {
     _nombreController.text = _originalTrabajador['nombre'] ?? '';
     _apellidoPaternoController.text = _originalTrabajador['apellido_paterno'] ?? '';
@@ -192,13 +204,12 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     _rutController.text = _originalTrabajador['rut'] ?? '';
     _cargoController.text = _originalTrabajador['cargo'] ?? '';
     _nacionalidadController.text = _originalTrabajador['nacionalidad'] ?? 'Chilena';
-    _vencimientoResidenciaController.text = _originalTrabajador['vencimiento_residencia'] ?? 'PERMANENCIA DEFINITIVA';
+    _vencimientoResidenciaController.text = _originalTrabajador['fecha_vencimiento_residencia'] ?? 'PERMANENCIA DEFINITIVA';
     _turnoController.text = _originalTrabajador['turno'] ?? '';
     _contratoCodigoController.text = _originalTrabajador['contrato_codigo'] ?? '';
     _sexoSeleccionado = _getValidDropdownValue(_originalTrabajador['sexo'], _sexos);
     _estadoSeleccionado = _getValidDropdownValue(_originalTrabajador['estado_trabajador'], _estados);
 
-    // Restore cumplimiento
     for (int i = 0; i < _cumplimiento.length && i < _originalCumplimiento.length; i++) {
       _cumplimiento[i]['valor_estado'] = _originalCumplimiento[i]['valor_estado'];
       _cumplimiento[i]['fecha_vencimiento'] = _originalCumplimiento[i]['fecha_vencimiento'];
@@ -210,7 +221,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     });
   }
 
-  /// Confirm close when there are unsaved changes
   Future<bool> _confirmClose() async {
     if (!_hasUnsavedChanges) return true;
     final result = await showDialog<bool>(
@@ -244,9 +254,7 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final trabajadorId = widget.trabajador['id'];
-
-      await _supabase.from('trabajadores').update({
+      final trabajadorData = {
         'rut': _rutController.text.trim(),
         'nombre': _nombreController.text.trim(),
         'apellido_paterno': _apellidoPaternoController.text.trim(),
@@ -255,25 +263,25 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
             : _apellidoMaternoController.text.trim(),
         'cargo': _cargoController.text.trim(),
         'nacionalidad': _nacionalidadController.text.trim(),
-        'vencimiento_residencia': _vencimientoResidenciaController.text.trim().isEmpty
+        'fecha_vencimiento_residencia': _vencimientoResidenciaController.text.trim().isEmpty
             ? null
             : _vencimientoResidenciaController.text.trim(),
         'turno': _turnoController.text.trim(),
         'contrato_codigo': _contratoCodigoController.text.trim(),
         'sexo': _sexoSeleccionado,
         'estado_trabajador': _estadoSeleccionado,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', trabajadorId);
+      };
 
-      for (final item in _cumplimiento) {
-        await _supabase.from('cumplimiento_trabajadores').upsert({
-          'trabajador_id': trabajadorId,
-          'requisito_id': item['requisito_id'],
-          'valor_estado': item['valor_estado'],
-          'fecha_vencimiento': item['fecha_vencimiento'],
-          'updated_at': DateTime.now().toIso8601String(),
-        }, onConflict: 'trabajador_id,requisito_id');
-      }
+      final cumplimientosData = _cumplimiento.map((item) => {
+        'requisito_id': item['requisito_id'],
+        'valor_estado': item['valor_estado'],
+        'fecha_vencimiento': item['fecha_vencimiento'],
+      }).toList();
+
+      await _service.guardarTrabajadorCompleto(
+        datosTrabajador: trabajadorData,
+        cumplimientos: cumplimientosData,
+      );
 
       if (mounted) {
         setState(() {
@@ -284,6 +292,12 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
           const SnackBar(content: Text('Cambios guardados exitosamente')),
         );
         Navigator.pop(context, true);
+      }
+    } on ServiceException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.message}')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -319,11 +333,8 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final trabajadorId = widget.trabajador['id'];
-      await _supabase.from('trabajadores').update({
-        'estado_trabajador': 'DESVINCULADO',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', trabajadorId);
+      final trabajadorId = widget.trabajador['id'] as int;
+      await _service.darDeBaja(trabajadorId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -365,11 +376,8 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final trabajadorId = widget.trabajador['id'];
-      await _supabase.from('trabajadores').update({
-        'estado_trabajador': 'ACTIVO',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', trabajadorId);
+      final trabajadorId = widget.trabajador['id'] as int;
+      await _service.rehabilitar(trabajadorId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -435,7 +443,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
           decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _divider, width: 1))),
           child: Row(
             children: [
-              // Botón Volver atrás
               _BotonVolver(onVolver: _confirmClose),
               const SizedBox(width: 12),
               Expanded(
@@ -460,7 +467,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
                   ],
                 ),
               ),
-              // ── Action buttons in header ──
               if (!_isEditing) ...[
                 _BotonEditar(onEdit: _enterEditMode),
                 const SizedBox(width: 8),
@@ -478,17 +484,21 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
         Expanded(
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(isWide ? 24 : 16, 16, isWide ? 24 : 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDatosMaestros(),
-                const SizedBox(height: 20),
-                _buildRequisitosHSE(),
-              ],
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildDatosMaestros(),
+                    const SizedBox(height: 20),
+                    _buildRequisitosHSE(),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-        // Footer (only in edit mode)
         if (_isEditing) _buildFooter(),
       ],
     );
@@ -571,7 +581,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
           Text(label, style: const TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
           if (!_isEditing)
-            // Read-only display
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               decoration: BoxDecoration(
@@ -582,7 +591,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
               child: Text(controller.text.isEmpty ? '—' : controller.text, style: TextStyle(color: _textPrimary, fontSize: 13)),
             )
           else
-            // Editable field
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               decoration: BoxDecoration(
@@ -603,7 +611,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
 
   Widget _buildDropdownField(
       String label, String? valor, List<String> items, ValueChanged<String?> onChange) {
-    // Ensure valor is always a valid dropdown value
     final safeValor = _getValidDropdownValue(valor, items);
 
     return Padding(
@@ -614,7 +621,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
           Text(label, style: const TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
           if (!_isEditing)
-            // Read-only display
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               decoration: BoxDecoration(
@@ -625,7 +631,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
               child: Text(valor?.isEmpty ?? true ? '—' : (valor ?? ''), style: TextStyle(color: _textPrimary, fontSize: 13)),
             )
           else
-            // Editable dropdown
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
@@ -686,10 +691,8 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
   Color _colorEstado(String valor) {
     switch (valor) {
       case 'VIGENTE':
-      case 'SI':
         return _green;
       case 'VENCIDO':
-      case 'NO':
         return _red;
       default:
         return _orange;
@@ -709,21 +712,20 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
             columns: const [
               DataColumn(label: Text('#', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
               DataColumn(label: Text('REQUISITO HSE', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
-              DataColumn(label: Text('ESTADO VALOR', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
-              DataColumn(label: Text('FECHA VENCIMIENTO', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
+              DataColumn(label: Text('FECHA / N/A', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
+              DataColumn(label: Text('ESTADO', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
             ],
             rows: _cumplimiento.asMap().entries.map((entry) {
               final i = entry.key;
               final c = entry.value;
-              final requiereVen = c['requiere_vencimiento'] == true;
               final estado = c['valor_estado'] ?? 'N/A';
               final fecha = c['fecha_vencimiento'] as String?;
 
               return DataRow(cells: [
                 DataCell(Text('${i + 1}', style: const TextStyle(color: _textSecondary, fontSize: 12))),
                 DataCell(Text(c['nombre'], style: const TextStyle(color: _textPrimary, fontSize: 13))),
-                DataCell(_buildEstadoDropdown(i, estado, _colorEstado(estado))),
-                DataCell(_buildFechaField(i, requiereVen, estado, fecha)),
+                DataCell(_buildSelectorFechaYNA(i, fecha, estado)),
+                DataCell(_buildBadgeEstado(estado, _colorEstado(estado))),
               ]);
             }).toList(),
           ),
@@ -739,7 +741,6 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
       itemCount: _cumplimiento.length,
       itemBuilder: (context, i) {
         final c = _cumplimiento[i];
-        final requiereVen = c['requiere_vencimiento'] == true;
         final estado = c['valor_estado'] ?? 'N/A';
         final fecha = c['fecha_vencimiento'] as String?;
 
@@ -758,9 +759,9 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(child: _buildEstadoDropdown(i, estado, _colorEstado(estado))),
+                  Expanded(flex: 3, child: _buildSelectorFechaYNA(i, fecha, estado)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildFechaField(i, requiereVen, estado, fecha)),
+                  Expanded(flex: 1, child: _buildBadgeEstado(estado, _colorEstado(estado))),
                 ],
               ),
             ],
@@ -770,71 +771,33 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     );
   }
 
-  Widget _buildEstadoDropdown(int index, String valorActual, Color color) {
-    final safeValor = _getValidDropdownValue(valorActual, _estadosRequisito);
-
-    if (!_isEditing) {
-      // Read-only display
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
-        ),
-        child: Text(valorActual, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-      );
+  String _calcularEstadoDesdeFecha(String? fechaStr, {String fallback = 'N/A'}) {
+    if (fechaStr == null || fechaStr.isEmpty) return fallback;
+    try {
+      final fecha = DateTime.parse(fechaStr);
+      return fecha.isAfter(DateTime.now()) ? 'VIGENTE' : 'VENCIDO';
+    } catch (_) {
+      return fallback;
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: safeValor,
-          isDense: true,
-          isExpanded: true,
-          dropdownColor: _cardDark,
-          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
-          hint: Text('Seleccionar...', style: TextStyle(color: _textMuted, fontSize: 12)),
-          items: _estadosRequisito.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() {
-              _cumplimiento[index]['valor_estado'] = v;
-              final requiereVen = _cumplimiento[index]['requiere_vencimiento'] == true;
-              if (!requiereVen || v == 'SI' || v == 'N/A') {
-                _cumplimiento[index]['fecha_vencimiento'] = null;
-              }
-              _markChanges();
-            });
-          },
-        ),
-      ),
-    );
   }
 
-  Widget _buildFechaField(int index, bool requiereVencimiento, String estado, String? fecha) {
-    final mostrarFecha = requiereVencimiento && estado != 'SI' && estado != 'N/A';
+  void _actualizarEstado(int index, {String? fecha, bool esNoAplica = false}) {
+    setState(() {
+      if (esNoAplica) {
+        _cumplimiento[index]['fecha_vencimiento'] = null;
+        _cumplimiento[index]['valor_estado'] = 'N/A';
+      } else {
+        _cumplimiento[index]['fecha_vencimiento'] = fecha;
+        _cumplimiento[index]['valor_estado'] = _calcularEstadoDesdeFecha(fecha);
+      }
+      _markChanges();
+    });
+  }
 
-    if (!mostrarFecha) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: _bgDark,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: _divider, width: 0.5),
-        ),
-        child: Text('-- No Aplica --', style: TextStyle(color: _textMuted, fontSize: 12)),
-      );
-    }
+  Widget _buildSelectorFechaYNA(int index, String? fecha, String estadoActual) {
+    final esNoAplica = estadoActual == 'N/A';
 
     if (!_isEditing) {
-      // Read-only display
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -842,43 +805,99 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: _divider.withValues(alpha: 0.3), width: 0.5),
         ),
-        child: Text(fecha ?? '—', style: TextStyle(color: fecha != null ? _textPrimary : _textMuted, fontSize: 12)),
+        child: Text(
+          esNoAplica ? 'N/A' : (fecha ?? '—'),
+          style: TextStyle(color: esNoAplica ? _textMuted : _textPrimary, fontSize: 12),
+        ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _bgDark,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: _divider, width: 0.5),
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      GestureDetector(
+        onTap: () => _actualizarEstado(index, esNoAplica: !esNoAplica),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: esNoAplica ? _orange.withValues(alpha: 0.25) : _bgDark,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: esNoAplica ? _orange.withValues(alpha: 0.8) : _divider, width: esNoAplica ? 1.5 : 1),
+          ),
+          child: Text('N/A', style: TextStyle(
+            color: esNoAplica ? _orange : _textMuted,
+            fontSize: 11, fontWeight: esNoAplica ? FontWeight.w700 : FontWeight.w600,
+          )),
+        ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              fecha ?? 'dd/mm/aaaa',
-              style: TextStyle(color: fecha != null ? _textPrimary : _textMuted, fontSize: 12),
-            ),
+      const SizedBox(width: 6),
+      GestureDetector(
+        onTap: () => _seleccionarFechaRequisito(index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: esNoAplica ? _bgDark : _accentBlue.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: esNoAplica ? _divider : _accentBlue.withValues(alpha: 0.5), width: esNoAplica ? 0.5 : 1),
           ),
-          IconButton(
-            icon: const Icon(Icons.calendar_today_rounded, color: _textSecondary, size: 16),
-            onPressed: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: fecha != null ? DateTime.parse(fecha) : DateTime.now(),
-                firstDate: DateTime(2000),
-                lastDate: DateTime(2100),
-              );
-              if (picked != null) {
-                setState(() {
-                  _cumplimiento[index]['fecha_vencimiento'] = picked.toIso8601String().split('T')[0];
-                  _markChanges();
-                });
-              }
-            },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                esNoAplica ? 'Sin fecha' : (fecha ?? 'Seleccionar'),
+                style: TextStyle(
+                  color: esNoAplica ? _textMuted : _textPrimary,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.calendar_today_rounded, color: esNoAplica ? _textMuted : _accentBlue, size: 14),
+            ],
           ),
-        ],
+        ),
+      ),
+    ]);
+  }
+
+  Future<void> _seleccionarFechaRequisito(int index) async {
+    final fechaActualStr = _cumplimiento[index]['fecha_vencimiento'] as String?;
+    final fechaInicial = fechaActualStr != null
+        ? DateTime.tryParse(fechaActualStr) ?? DateTime.now()
+        : DateTime.now();
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: fechaInicial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null && mounted) {
+      final fechaStr = picked.toIso8601String().split('T')[0];
+      _actualizarEstado(index, fecha: fechaStr);
+    }
+  }
+
+  Widget _buildBadgeEstado(String estado, Color color) {
+    if (!_isEditing) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
+        ),
+        child: Text(estado, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
+      ),
+      child: Text(
+        estado == 'VIGENTE' ? '✓ Vigente' : (estado == 'VENCIDO' ? '✗ Vencido' : '— N/A'),
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -306,21 +306,18 @@ class IncidenteProvider extends ChangeNotifier {
         // En producción podrías manejar esto diferente
       }
 
-      // Validar que el supervisorId sea un UUID válido antes de enviarlo
-      final supervisorId = _supervisor!.id;
-      final isUuid = RegExp(
-              r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-              caseSensitive: false)
-          .hasMatch(supervisorId);
+      // El supervisor seleccionado es un trabajador (id integer), no un usuario UUID
+      final supervisorTrabajadorId = int.tryParse(_supervisor!.id);
 
-      // Crear registro del incidente
+      // Crear registro del incidente (alineado con nuevo esquema)
       final incidente = Incidente(
+        titulo: '${_tipoIncidente!.nombre} - ${_area!.nombre}',
         descripcion: _descripcion.trim(),
         tipoIncidenteId: _tipoIncidente!.id,
         areaId: _area!.id,
-        supervisorId: isUuid ? supervisorId : null,
-        fotosUrls: fotosUrls,
-        usuarioId: _client.auth.currentUser?.id,
+        supervisorTrabajadorId: supervisorTrabajadorId,
+        fotos: fotosUrls,
+        usuarioReportanteId: _client.auth.currentUser?.id,
       );
 
       await _client

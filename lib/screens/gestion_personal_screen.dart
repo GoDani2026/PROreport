@@ -2,15 +2,16 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:excel/excel.dart' as excel;
+import 'package:excel/excel.dart' as excel hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import '../services/trabajador_service.dart';
 import '../utils/download_helper.dart' as download_helper;
 import 'editar_trabajador_screen.dart';
 import '../widgets/collapsible_sidebar.dart';
 import 'registro_trabajador_screen.dart';
 import 'solicitud_levantamiento_screen.dart';
+import 'carga_masiva_screen.dart';
 
 const Color _bgDark = Color(0xFF0A1628);
 const Color _cardDark = Color(0xFF132336);
@@ -35,7 +36,7 @@ class GestionPersonalScreen extends StatefulWidget {
 }
 
 class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
-  final _supabase = Supabase.instance.client;
+  final _service = TrabajadorService();
   List<Map<String, dynamic>> _todosTrabajadores = [];
   bool _isLoading = true;
   int _dotacionOficial = 0;
@@ -71,14 +72,10 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
   Future<void> _cargarDatos() async {
     setState(() => _isLoading = true);
     try {
-      final results = await Future.wait([
-        _supabase.from('trabajadores').select('id, rut, nombre, apellido_paterno, apellido_materno, cargo, nacionalidad, vencimiento_residencia, sexo, turno, estado_trabajador, contrato_codigo').order('apellido_paterno', ascending: true),
-        _supabase.from('cumplimiento_trabajadores').select('trabajador_id, requisito_id, valor_estado'),
-        _supabase.from('requisitos_hse').select('id'),
-      ]);
-      final trabajadores = results[0] as List;
-      final cumplimiento = results[1] as List;
-      final requisitos = results[2] as List;
+      final data = await _service.fetchDatosExportacion();
+      final trabajadores = data['trabajadores']!;
+      final cumplimiento = data['cumplimiento']!;
+      final requisitos = data['requisitos']!;
       if (!mounted) return;
       // Convertir a Map puros para evitar errores de serialización en compute/isolate
       final trabajadoresMap = trabajadores.map((t) => Map<String, dynamic>.from(t as Map)).toList();
@@ -127,9 +124,8 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
 
       final estados = cumplimientoIndex[trabajadorKey] ?? [];
       final tieneVencido = estados.contains('VENCIDO');
-      final tieneNo = estados.contains('NO');
 
-      if (tieneVencido || tieneNo) {
+      if (tieneVencido) {
         observadosIds.add(trabajadorKey);
       } else {
         acreditadosIds.add(trabajadorKey);
@@ -213,7 +209,41 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
     if (_acreditadosIds.contains(trabajadorKey)) return _green;
     return _green;
   }
-  void _navegarARegistro() => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegistroTrabajadorScreen())).then((_) => _cargarDatos());
+  void _navegarARegistro() {
+    _mostrarDialogoRegistro();
+  }
+
+  void _mostrarDialogoRegistro() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(0xFF132336),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Registro de Personal", style: TextStyle(color: Color(0xFFECEFF1), fontSize: 18, fontWeight: FontWeight.bold)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          _OpcionRegistro(
+            icon: Icons.person_add_alt_rounded,
+            titulo: "Registro Individual",
+            descripcion: "Ingrese los datos de un trabajador manualmente, formulario personalizado",
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const RegistroTrabajadorScreen())).then((_) => _cargarDatos());
+            },
+          ),
+          const SizedBox(height: 12),
+          _OpcionRegistro(
+            icon: Icons.upload_file_rounded,
+            titulo: "Carga Masiva",
+            descripcion: "Subir multiples trabajadores desde un archivo CSV o Excel con validacion automatica",
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const CargaMasivaScreen())).then((_) => _cargarDatos());
+            },
+          ),
+        ]),
+      ),
+    );
+  }
   bool _isOpeningEdicion = false;
 
   Future<void> _abrirEdicion(Map<String, dynamic> trabajador) async {
@@ -235,23 +265,115 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
     setState(() => _isLoading = true);
     try {
       final activos = _todosTrabajadores.where((t) => t['estado_trabajador'] == 'ACTIVO').toList();
-      final reqs = await _supabase.from('requisitos_hse').select().order('id', ascending: true);
-      final requisitos = List<Map<String, dynamic>>.from(reqs);
+      final requisitos = await _service.fetchRequisitosHSE();
       final ids = activos.map((t) => _toInt(t['id'])).whereType<int>().toList();
       final cumplMap = <int, Map<int, Map<String, dynamic>>>{};
       if (ids.isNotEmpty) {
-        final cumpl = await _supabase.from('cumplimiento_trabajadores').select().inFilter('trabajador_id', ids);
+        final cumpl = await _service.fetchCumplimientoPorIds(ids);
         for (final c in cumpl) { final tid = _toInt(c['trabajador_id']); final rid = c['requisito_id'] as int; if (tid != null) cumplMap.putIfAbsent(tid, () => {})[rid] = c; }
       }
+
+      // Headers fijos del template (columnas 1-20)
+      final fixedHeaders = [
+        'Nombre',                                // col 0
+        'Apellido Paterno',                      // col 1
+        'Apellido Materno',                      // col 2
+        'Rut',                                   // col 3
+        'Cargo',                                 // col 4
+        'Nacionalidad',                          // col 5
+        'Vencimiento de Residencia',             // col 6
+        'Turno',                                 // col 7
+        'AG/AF',                                 // col 8
+        'Examen Alcohol y drogas',               // col 9
+        'Examen Psicosensometrico',              // col 10
+        'Fecha Vencimiento Inducción SQM',       // col 11
+        'Protocolo SQM (ODI)',                   // col 12
+        'CTTA(ODI)',                             // col 13
+        'Certificación (Soldadores, electricos, riggers, op.Maquinaria, etc)', // col 14
+        'Licencia Interna SQM',                  // col 15
+        'Difusión Procedimientos',               // col 16
+        'Difusión Plan y Sub Planes SQM',        // col 17
+        'Difusión Plan y Sub Planes Cttas',      // col 18
+        'Difusión HDS',                          // col 19
+      ];
+      // Mapear nombre de requisito BD a índice de columna fija (col 8..19)
+      final reqToFixedCol = <String, int>{};
+      for (int i = 8; i < fixedHeaders.length; i++) {
+        reqToFixedCol[fixedHeaders[i].toLowerCase().trim()] = i;
+      }
+      // Separar requisitos: los que coinciden con fixed (cols 8-19) vs extras (cols 20+)
+      final fixedReqs = <Map<String, dynamic>>[];
+      final extraReqs = <Map<String, dynamic>>[];
+      for (final r in requisitos) {
+        final name = (r['nombre_requisito'] as String).toLowerCase().trim();
+        if (reqToFixedCol.containsKey(name)) {
+          fixedReqs.add(r);
+        } else {
+          extraReqs.add(r);
+        }
+      }
+      final allHeaders = <String>[
+        ...fixedHeaders,
+        ...extraReqs.map((r) => r['nombre_requisito'] as String),
+      ];
+
       final book = excel.Excel.createExcel();
-      final sheet = book['Planilla Personal'];
-      final headers = ['RUT','Nombre','Apellido Paterno','Apellido Materno','Cargo','Nacionalidad','Venc. Residencia','Sexo','Turno','Contrato', ...requisitos.map((r) => r['nombre_requisito'] as String)];
-      sheet.appendRow(headers.map((h) => excel.TextCellValue(h)).toList());
+      final sheetName = book.getDefaultSheet() ?? 'Sheet';
+      final sheet = book[sheetName];
+
+      // Título en E2
+      final titulo = 'LISTADO DE PERSONAL CONTRATO - SC 9500014891 - Nombre "Servicios Operacionales para Planta Química Litio"';
+      sheet.cell(excel.CellIndex.indexByString('E2')).value = excel.TextCellValue(titulo);
+
+      // Encabezados en fila 1 (appendRow agrega fila 1)
+      final rowHeaders = List<excel.CellValue?>.filled(26, null);
+      for (int i = 0; i < allHeaders.length && i < 26; i++) {
+        rowHeaders[i] = excel.TextCellValue(allHeaders[i]);
+      }
+      sheet.appendRow(rowHeaders);
+
+      // Datos
       for (final t in activos) {
         final tid = _toInt(t['id']);
         final cumT = tid != null ? (cumplMap[tid] ?? {}) : {};
-        final row = [t['rut'] ?? '', t['nombre'] ?? '', t['apellido_paterno'] ?? '', t['apellido_materno'] ?? '', t['cargo'] ?? '', t['nacionalidad'] ?? '', t['vencimiento_residencia'] ?? '', t['sexo'] ?? '', t['turno'] ?? '', t['contrato_codigo'] ?? '', ...requisitos.map((r) { final rid = r['id'] as int; final c = cumT[rid]; final val = c?['valor_estado'] ?? 'Pendiente'; final fecha = c?['fecha_vencimiento']; return fecha != null ? '$val ($fecha)' : val; })];
-        sheet.appendRow(row.map((v) => excel.TextCellValue(v.toString())).toList());
+        final rowData = List<dynamic>.filled(26, '');
+
+        // Columnas 0-7: campos fijos del trabajador
+        rowData[0] = t['nombre'] ?? '';
+        rowData[1] = t['apellido_paterno'] ?? '';
+        rowData[2] = t['apellido_materno'] ?? '';
+        rowData[3] = t['rut'] ?? '';
+        rowData[4] = t['cargo'] ?? '';
+        rowData[5] = t['nacionalidad'] ?? '';
+        rowData[6] = (t['fecha_vencimiento_residencia'] ?? '').toString();
+        rowData[7] = t['turno'] ?? '';
+
+        // Columnas 8-19: requisitos fijos mapeados por nombre
+        for (final r in fixedReqs) {
+          final rid = r['id'] as int;
+          final name = (r['nombre_requisito'] as String).toLowerCase().trim();
+          final colIdx = reqToFixedCol[name] ?? -1;
+          if (colIdx >= 8 && colIdx < 20) {
+            final c = cumT[rid];
+            final val = c?['valor_estado'] ?? 'N/A';
+            final fecha = c?['fecha_vencimiento'];
+            rowData[colIdx] = fecha != null ? '$val ($fecha)' : val;
+          }
+        }
+
+        // Columnas 20+: requisitos extras que no coinciden con los fijos
+        for (int r = 0; r < extraReqs.length; r++) {
+          final req = extraReqs[r];
+          final rid = req['id'] as int;
+          final c = cumT[rid];
+          final val = c?['valor_estado'] ?? 'N/A';
+          final fecha = c?['fecha_vencimiento'];
+          final colIdx = 20 + r;
+          if (colIdx < 26) rowData[colIdx] = fecha != null ? '$val ($fecha)' : val;
+        }
+
+        final rowCells = rowData.map((v) => excel.TextCellValue(v.toString())).toList();
+        sheet.appendRow(rowCells);
       }
 
       final encoded = book.encode();
@@ -331,9 +453,9 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
               onSearchChanged: updateSearchQuery,
               onSetFiltro: setFiltro,
               onPageChanged: changePage,
-              onAgregarTrabajador: _navegarARegistro,
-              onVerTrabajador: _abrirEdicion,
-              onExportarPlanilla: _exportarPlanilla,
+                  onAgregarTrabajador: _navegarARegistro,
+                  onVerTrabajador: _abrirEdicion,
+                  onExportarPlanilla: _exportarPlanilla,
               nombreCompleto: _nombreCompleto,
               estadoActivacion: _estadoActivacion,
               colorEstado: _colorEstado,
@@ -611,3 +733,51 @@ class _PaginationControls extends StatelessWidget {
 }
 
 class _TableHeaderText extends StatelessWidget { final String text; const _TableHeaderText(this.text); @override Widget build(BuildContext context) => Text(text, style: TextStyle(color: _textSecondary, fontSize: 12, fontWeight: FontWeight.w600)); }
+
+class _OpcionRegistro extends StatelessWidget {
+  final IconData icon;
+  final String titulo;
+  final String descripcion;
+  final VoidCallback onTap;
+  const _OpcionRegistro({required this.icon, required this.titulo, required this.descripcion, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1628),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF1E3456), width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B3A5C).withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: const Color(0xFFFF6B35), size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(titulo, style: const TextStyle(color: Color(0xFFECEFF1), fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(descripcion, style: const TextStyle(color: Color(0xFF90A4AE), fontSize: 12)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFF607D8B), size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+}

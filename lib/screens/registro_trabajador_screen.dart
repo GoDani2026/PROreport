@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/trabajador_service.dart';
+import '../services/exceptions.dart';
 
 class RegistroTrabajadorScreen extends StatefulWidget {
   final Map<String, dynamic>? trabajadorEdit;
@@ -12,7 +13,7 @@ class RegistroTrabajadorScreen extends StatefulWidget {
 }
 
 class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
-  final _supabase = Supabase.instance.client;
+  final _service = TrabajadorService();
 
   // Controladores para campos del Paso 1 (trabajador)
   final _rutController = TextEditingController();
@@ -72,7 +73,7 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
       _apellidoMaternoController.text = t['apellido_materno'] ?? '';
       _cargoController.text = t['cargo'] ?? '';
       _nacionalidadController.text = t['nacionalidad'] ?? 'Chilena';
-      _vencimientoResidenciaController.text = t['vencimiento_residencia'] ?? '';
+      _vencimientoResidenciaController.text = t['fecha_vencimiento_residencia'] ?? '';
       _turnoController.text = t['turno'] ?? '';
       _estadoSeleccionado = t['estado_trabajador'] ?? 'ACTIVO';
       _contratoCodigoController.text = t['contrato_codigo'] ?? '';
@@ -82,11 +83,7 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
 
   Future<void> _cargarRequisitosHSE() async {
     try {
-      // Cargar requisitos desde la base de datos (solo lectura)
-      final response = await _supabase
-          .from('requisitos_hse')
-          .select()
-          .order('id', ascending: true);
+      final response = await _service.fetchRequisitosHSE();
 
       if (mounted) {
         // Verificar que existan requisitos
@@ -140,10 +137,7 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
       final trabajadorId = _toInt(widget.trabajadorEdit!['id']);
       if (trabajadorId == null) return;
 
-      final response = await _supabase
-          .from('cumplimiento_trabajadores')
-          .select()
-          .eq('trabajador_id', trabajadorId);
+      final response = await _service.fetchCumplimientoTrabajador(trabajadorId);
 
       if (mounted) {
         setState(() {
@@ -173,7 +167,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
   }
 
   Future<void> _guardarTrabajador() async {
-    // Validar Paso 1
     if (_rutController.text.isEmpty ||
         _nombreController.text.isEmpty ||
         _apellidoPaternoController.text.isEmpty ||
@@ -191,8 +184,7 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
     setState(() => _isGuardando = true);
 
     try {
-      // Paso 1: Upsert del trabajador
-      final trabajadorData = {
+      final Map<String, dynamic> trabajadorData = {
         'rut': _rutController.text.trim(),
         'nombre': _nombreController.text.trim(),
         'apellido_paterno': _apellidoPaternoController.text.trim(),
@@ -201,7 +193,7 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
             : _apellidoMaternoController.text.trim(),
         'cargo': _cargoController.text.trim(),
         'nacionalidad': _nacionalidadController.text.trim(),
-        'vencimiento_residencia': _vencimientoResidenciaController.text.trim().isEmpty
+        'fecha_vencimiento_residencia': _vencimientoResidenciaController.text.trim().isEmpty
             ? null
             : _vencimientoResidenciaController.text.trim(),
         'sexo': _sexoSeleccionado,
@@ -210,57 +202,38 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
         'contrato_codigo': _contratoCodigoController.text.trim(),
       };
 
-      dynamic trabajadorResultado;
-
+      // En edición, incluir el ID existente
       if (widget.trabajadorEdit != null) {
-        // Modo edición: upsert con ID existente
-        trabajadorResultado = await _supabase
-            .from('trabajadores')
-            .upsert({
-              ...trabajadorData,
-              'id': _toInt(widget.trabajadorEdit!['id']),
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .select()
-            .single();
-      } else {
-        // Modo creación: upsert (generará el UUID automático para comparar)
-        trabajadorResultado = await _supabase
-            .from('trabajadores')
-            .upsert(trabajadorData, onConflict: 'rut')
-            .select()
-            .single();
+        final editId = _toInt(widget.trabajadorEdit!['id']);
+        if (editId != null) {
+          trabajadorData['id'] = editId;
+        }
       }
 
-      final trabajadorId = _toInt(trabajadorResultado['id']);
-      if (trabajadorId == null) {
-        throw Exception('No se pudo obtener el ID del trabajador');
-      }
-
-      // Paso 2: Bulk insert/update de cumplimiento
-      final cumplimientoParaGuardar = _cumplimientoData.map((item) {
-        return {
-          'trabajador_id': trabajadorId,
-          'requisito_id': item['requisito_id'],
-          'valor_estado': item['valor_estado'],
-          'fecha_vencimiento': item['fecha_vencimiento'],
-          'documento_url': item['documento_url'],
-          'updated_at': DateTime.now().toIso8601String(),
-        };
+      // Guardar atómicamente usando RPC (trabajador + cumplimientos en una tx)
+      final cumplimientos = _cumplimientoData.map((item) => {
+        'requisito_id': item['requisito_id'],
+        'valor_estado': item['valor_estado'],
+        'fecha_vencimiento': item['fecha_vencimiento'],
+        'documento_url': item['documento_url'],
       }).toList();
 
-      await _supabase
-          .from('cumplimiento_trabajadores')
-          .upsert(
-            cumplimientoParaGuardar,
-            onConflict: 'trabajador_id,requisito_id',
-          );
+      await _service.guardarTrabajadorCompleto(
+        datosTrabajador: trabajadorData,
+        cumplimientos: cumplimientos,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Trabajador guardado exitosamente')),
         );
         Navigator.pop(context, true);
+      }
+    } on ServiceException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.message}')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -282,6 +255,28 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
     return null;
   }
 
+  String _calcularEstadoDesdeFecha(String? fechaStr) {
+    if (fechaStr == null || fechaStr.isEmpty) return 'N/A';
+    try {
+      final fecha = DateTime.parse(fechaStr);
+      return fecha.isAfter(DateTime.now()) ? 'VIGENTE' : 'VENCIDO';
+    } catch (_) {
+      return 'N/A';
+    }
+  }
+
+  void _actualizarEstadoRequisito(int index, {String? fecha, bool esNoAplica = false}) {
+    setState(() {
+      if (esNoAplica) {
+        _cumplimientoData[index]['fecha_vencimiento'] = null;
+        _cumplimientoData[index]['valor_estado'] = 'N/A';
+      } else {
+        _cumplimientoData[index]['fecha_vencimiento'] = fecha;
+        _cumplimientoData[index]['valor_estado'] = _calcularEstadoDesdeFecha(fecha);
+      }
+    });
+  }
+
   Future<void> _seleccionarFecha(int index) async {
     final fechaInicial = _cumplimientoData[index]['fecha_vencimiento'] != null
         ? DateTime.parse(_cumplimientoData[index]['fecha_vencimiento'])
@@ -296,43 +291,72 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
     );
 
     if (fechaSeleccionada != null) {
-      setState(() {
-        _cumplimientoData[index]['fecha_vencimiento'] =
-            fechaSeleccionada.toIso8601String().split('T')[0];
-      });
+      _actualizarEstadoRequisito(index, fecha: fechaSeleccionada.toIso8601String().split('T')[0]);
     }
   }
 
+  /// Selector unificado: botones N/A y Fecha siempre visibles (toggle).
+  Widget _buildSelectorFechaYNA(int index, String? fecha, String estadoActual) {
+    final esNoAplica = estadoActual == 'N/A';
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      GestureDetector(
+        onTap: () => _actualizarEstadoRequisito(index, esNoAplica: !esNoAplica),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: esNoAplica ? Colors.orange.withValues(alpha: 0.25) : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: esNoAplica ? Colors.orange.withValues(alpha: 0.8) : Colors.grey, width: esNoAplica ? 1.5 : 1),
+          ),
+          child: Text('N/A', style: TextStyle(
+            color: esNoAplica ? Colors.orange : Colors.grey,
+            fontSize: 11, fontWeight: esNoAplica ? FontWeight.w700 : FontWeight.w600,
+          )),
+        ),
+      ),
+      const SizedBox(width: 6),
+      GestureDetector(
+        onTap: () => _seleccionarFecha(index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: esNoAplica ? Colors.grey.shade100 : Colors.blue.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: esNoAplica ? Colors.grey : Colors.blue.withValues(alpha: 0.5), width: esNoAplica ? 0.5 : 1),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(esNoAplica ? 'Sin fecha' : (fecha ?? 'Seleccionar'), style: TextStyle(color: esNoAplica ? Colors.grey : Colors.black87, fontSize: 11)),
+            const SizedBox(width: 4),
+            Icon(Icons.calendar_today, color: esNoAplica ? Colors.grey : Colors.blue, size: 14),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  /// Badge de estado coloreado (informativo)
+  Widget _buildBadgeEstado(String estado) {
+    final color = estado == 'VIGENTE' ? Colors.green : (estado == 'VENCIDO' ? Colors.red : Colors.orange);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
+      ),
+      child: Text(
+        estado == 'VIGENTE' ? '✓ Vigente' : (estado == 'VENCIDO' ? '✗ Vencido' : '— N/A'),
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
   Future<void> _subirDocumento(int index) async {
-    try {
-      // Simulación de selección de archivo (en producción usa image_picker o file_picker)
-      // Aquí se debería implementar la selección real del archivo
-      final bytes = await rootBundle.load('assets/placeholder.pdf');
-      final fileName =
-          'trabajador_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
-      await _supabase.storage
-          .from('documentos_hse')
-          .uploadBinary(fileName, bytes.buffer.asUint8List());
-
-      final publicUrl = _supabase.storage
-          .from('documentos_hse')
-          .getPublicUrl(fileName);
-
-      setState(() {
-        _cumplimientoData[index]['documento_url'] = publicUrl;
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Documento subido exitosamente')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al subir documento: $e')),
-      );
-    }
+    // Funcionalidad pendiente: usar _service para subir documentos
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Subida de documentos próximamente')),
+    );
   }
 
   Widget _construirPaso1() {
@@ -531,16 +555,16 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
                 child: DataTable(
                   columns: const [
                     DataColumn(label: Text('Requisito HSE')),
+                    DataColumn(label: Text('Fecha / N/A')),
                     DataColumn(label: Text('Estado')),
-                    DataColumn(label: Text('Fecha Venc.')),
                     DataColumn(label: Text('Documento')),
                   ],
                   rows: _requisitos.asMap().entries.map((entry) {
                     final index = entry.key;
                     final requisito = entry.value;
                     final cum = _cumplimientoData[index];
-                    final requiereVencimiento = cum['requiere_vencimiento'] == true;
                     final estadoSeleccionado = cum['valor_estado'] ?? 'N/A';
+                    final fecha = cum['fecha_vencimiento'] as String?;
 
                     return DataRow(cells: [
                       DataCell(
@@ -553,56 +577,10 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
                         ),
                       ),
                       DataCell(
-                        DropdownButton<String>(
-                          value: estadoSeleccionado,
-                          isDense: true,
-                          items: const [
-                            DropdownMenuItem(value: 'VIGENTE', child: Text('VIGENTE')),
-                            DropdownMenuItem(value: 'SI', child: Text('SI')),
-                            DropdownMenuItem(value: 'NO', child: Text('NO')),
-                            DropdownMenuItem(value: 'N/A', child: Text('N/A')),
-                            DropdownMenuItem(value: 'VENCIDO', child: Text('VENCIDO')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _cumplimientoData[index]['valor_estado'] = value;
-                                // Si no requiere vencimiento o es SI/N/A, limpiar fecha
-                                if (!requiereVencimiento ||
-                                    value == 'SI' ||
-                                    value == 'N/A') {
-                                  _cumplimientoData[index]['fecha_vencimiento'] =
-                                      null;
-                                }
-                              });
-                            }
-                          },
-                        ),
+                        _buildSelectorFechaYNA(index, fecha, estadoSeleccionado),
                       ),
                       DataCell(
-                        Row(
-                          children: [
-                            if (requiereVencimiento &&
-                                    estadoSeleccionado != 'SI' &&
-                                    estadoSeleccionado != 'N/A')
-                              ElevatedButton.icon(
-                                onPressed: () => _seleccionarFecha(index),
-                                icon: const Icon(Icons.calendar_today, size: 18),
-                                label: Text(
-                                  cum['fecha_vencimiento'] != null
-                                      ? (cum['fecha_vencimiento'] as String)
-                                          .substring(0, 10)
-                                      : 'Seleccionar',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              )
-                            else
-                              const Text(
-                                'No Aplica',
-                                style: TextStyle(color: Colors.grey, fontSize: 12),
-                              ),
-                          ],
-                        ),
+                        _buildBadgeEstado(estadoSeleccionado),
                       ),
                       DataCell(
                         IconButton(
@@ -630,8 +608,8 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
               itemBuilder: (context, index) {
                 final requisito = _requisitos[index];
                 final cum = _cumplimientoData[index];
-                final requiereVencimiento = cum['requiere_vencimiento'] == true;
                 final estadoSeleccionado = cum['valor_estado'] ?? 'N/A';
+                final fecha = cum['fecha_vencimiento'] as String?;
 
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 6),
@@ -651,77 +629,11 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: estadoSeleccionado,
-                                decoration: const InputDecoration(
-                                  labelText: 'Estado',
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: 'VIGENTE', child: Text('VIGENTE')),
-                                  DropdownMenuItem(value: 'SI', child: Text('SI')),
-                                  DropdownMenuItem(value: 'NO', child: Text('NO')),
-                                  DropdownMenuItem(value: 'N/A', child: Text('N/A')),
-                                  DropdownMenuItem(
-                                      value: 'VENCIDO', child: Text('VENCIDO')),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      _cumplimientoData[index]['valor_estado'] =
-                                          value;
-                                      if (!requiereVencimiento ||
-                                          value == 'SI' ||
-                                          value == 'N/A') {
-                                        _cumplimientoData[index]
-                                            ['fecha_vencimiento'] = null;
-                                      }
-                                    });
-                                  }
-                                },
-                              ),
+                              child: _buildSelectorFechaYNA(index, fecha, estadoSeleccionado),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: requiereVencimiento &&
-                                      estadoSeleccionado != 'SI' &&
-                                      estadoSeleccionado != 'N/A'
-                                  ? ElevatedButton.icon(
-                                      onPressed: () => _seleccionarFecha(index),
-                                      icon: const Icon(Icons.calendar_today,
-                                          size: 18),
-                                      label: Text(
-                                        cum['fecha_vencimiento'] != null
-                                            ? (cum['fecha_vencimiento']
-                                                    as String)
-                                                .substring(0, 10)
-                                            : 'Seleccionar fecha',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    )
-                                  : Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 14,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: Colors.grey),
-                                        borderRadius:
-                                            BorderRadius.circular(4),
-                                      ),
-                                      child: const Text(
-                                        'No Aplica',
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
+                              child: _buildBadgeEstado(estadoSeleccionado),
                             ),
                             const SizedBox(width: 12),
                             IconButton(

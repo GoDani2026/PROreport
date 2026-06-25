@@ -148,7 +148,7 @@ class _DashboardHeader extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: Image.asset(
-              'Logo sL.png',
+              'Logo.png',
               width: 28,
               height: 28,
               fit: BoxFit.contain,
