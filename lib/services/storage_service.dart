@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 
@@ -66,6 +67,61 @@ class StorageService {
         .getPublicUrl('incidentes/$fileName');
 
     return publicUrl;
+  }
+
+  /// Sube una foto de evidencia al bucket 'evidencias' dentro de una subcarpeta por módulo.
+  /// [folderName] es el nombre del módulo (ej: 'gestion_personal', 'inspecciones', etc.)
+  /// Acepta XFile (compatible con web y móvil) o bytes directamente.
+  Future<String> uploadEvidencia(XFile imageFile, String folderName) async {
+    try {
+      final fileExtension = imageFile.name.split('.').last.toLowerCase();
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('Usuario no autenticado');
+      }
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_$userId.$fileExtension';
+      final filePath = '$folderName/$fileName';
+
+      // Determinar contentType según la extensión real del archivo
+      final contentType = _getContentType(fileExtension);
+
+      await _client.storage
+          .from('evidencias')
+          .uploadBinary(
+            filePath,
+            await imageFile.readAsBytes(),
+            fileOptions: FileOptions(
+              contentType: contentType,
+              upsert: true,
+            ),
+          );
+
+      return _client.storage.from('evidencias').getPublicUrl(filePath);
+    } catch (e) {
+      throw Exception('Error al subir evidencia a "$folderName": $e');
+    }
+  }
+
+  /// Retorna el MIME type según la extensión del archivo
+  String _getContentType(String extension) {
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'bmp':
+        return 'image/bmp';
+      case 'pdf':
+        return 'application/pdf';
+      default:
+        return 'image/jpeg';
+    }
   }
 
   /// Sube múltiples imágenes desde bytes (útil para web)

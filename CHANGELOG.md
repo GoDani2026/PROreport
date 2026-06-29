@@ -8,6 +8,81 @@
 5. Subir a git
 
 
+## [V0.7] - 2026-06-28
+
+### Funcionalidades y mejoras
+- **Sistema de notificaciones por correo (Resend)**: Edge Function `send-notification-email` desplegada en Supabase para envío automático de correos cuando se crean detecciones de peligro, incidentes o cumplimientos.
+- **Formato de correo profesional**: Plantilla HTML responsiva con colores oficiales PROreport, badges de nivel de atención (BAJO/MEDIO/SIGNIFICATIVO), secciones de detalles del hallazgo y lista de personas notificadas en el contrato.
+- **Detección automática de destinatarios**: Busca supervisores y personal HSE/Prevención de Riesgos dentro de los mismos contratos del reportante, usando la tabla intermedia `trabajador_contratos`. (con errrores aun)
+
+- **Campo `from` corregido**: Se cambió `'<onboarding@resend.dev>'` por `"onboarding@resend.dev"` (sin `< >`) para resolver error 422 de Resend.
+- **Normalización de cargos**: Los cargos se normalizan eliminando tildes y convirtiendo a minúsculas para una detección robusta sin importar mayúsculas ni acentos.
+- **Palabras clave ampliadas**: Nuevas variantes para detectar supervisores (`jefe`, `coordinador`, `superintendente`, `capataz`, `encargado`) y prevención/HSE (`hse`, `seguridad`, `higiene`, `ambiente`).
+- **Logs de depuración**: La función incluye extensivo logging `[DEBUG]` para diagnosticar el flujo de búsqueda de personas notificadas.
+
+### Archivos nuevos
+- `supabase/functions/send-notification-email/index.ts` — Edge Function completa con procesamiento de 3 tipos de notificación
+- `supabase/functions/send-notification-email/deno.json` — Configuración de dependencias Deno
+- `sql/tools/instalar_triggers_v2.sql` — Triggers PostgreSQL + función `invocar_notification_edge` + configuración `app.edge_function_url`
+- `sql/tools/diagnostico_notificaciones.sql` — Script de verificación del estado de notificaciones
+
+### Problemas conocidos
+- La detección de supervisores/HSE depende de que los cargos en la tabla `trabajadores` contengan las palabras clave esperadas. Si hay cargos personalizados, deben agregarse a las listas de detección.
+- La cuenta gratuita de Resend (`onboarding@resend.dev`) tiene límite de envíos. Para producción se requiere dominio propio verificado.
+
+### Pendiente
+- Verificar en producción que los supervisores y personal HSE sean detectados correctamente según los cargos reales en la base de datos.
+- Evaluar migración a cuenta Resend de pago para eliminar límites.
+
+---
+
+## [V0.6.2] - 2026-06-27
+
+### Funcionalidades y mejoras
+- **Rol 'superadmin' en schema**: Se agregó `'superadmin'` al CHECK constraint de `perfiles.rol` en `sql/01_schema_autenticacion.sql` y `sql/FULL_SCHEMA_PROreport.sql`.
+- **Script de asignación superadmin mejorado**: `sql/tools/set_superadmin.sql` ahora corrige automáticamente el CHECK constraint antes de asignar el rol, y usa bloque `DO $$` para evitar errores de columna inexistente en `RETURNING`.
+- **RPCs de carga masativa incluidas en FULL_SCHEMA**: Se migraron `upsert_trabajador_completo` y `upsert_trabajadores_lote` a `sql/FULL_SCHEMA_PROreport.sql` (sección 5.6), eliminando dependencia externa de `sql/06_rpc_upsert_trabajador_completo.sql`.
+- **RLS en tablas de contratos**: Ahora `contratos` y `trabajador_contratos` tienen `ENABLE ROW LEVEL SECURITY` y políticas `FOR SELECT` hacia `authenticated`, permitiendo que la app cargue contratos al iniciar sesión.
+
+### Correcciones
+- **Carga masiva no enviaba `contrato_codigo`**: En `lib/screens/carga_masiva_screen.dart` se eliminó `contrato_codigo` del mapa `datos` que se envía a la RPC (la RPC lo extrae del JSON y lo inserta en `trabajador_contratos`).
+- **Comparación diffs en carga masiva**: Se eliminó `contrato_codigo` de la lista `_compararCampos` para evitar falsos positivos de "modificado" en cada carga.
+
+### Archivos modificados
+- `sql/FULL_SCHEMA_PROreport.sql` — CHECK con `superadmin`, RPCs de carga masiva, RLS en `contratos`/`trabajador_contratos`.
+- `sql/01_schema_autenticacion.sql` — CHECK con `superadmin`.
+- `sql/tools/set_superadmin.sql` — Asignación segura de superadmin.
+- `lib/screens/carga_masiva_screen.dart` — Payload limpio sin `contrato_codigo` y comparación sin ese campo.
+
+## [V0.6.1] - 2026-06-26
+
+### Funcionalidades y mejoras
+- **Normalización de Contratos (Multi-Contrato)**: Se creó la tabla maestra `public.contratos` con PK `codigo TEXT` y campo `vencimiento DATE`, más la tabla intermedia `public.trabajador_contratos` con `id SERIAL PRIMARY KEY`, `trabajador_id INTEGER` y `UNIQUE(trabajador_id, contrato_codigo)`.
+- **Migración automática de datos**: Script `sql/09_contratos_multicontrato.sql` que migra todos los `contrato_codigo` existentes en `trabajadores` a la nueva estructura, insertando códigos desconocidos como contratos nuevos.
+- **Vistas actualizadas para multi-contrato**: `v_cumplimiento_silver` y `v_dashboard_cumplimiento_gold` recreadas usando `STRING_AGG` sobre `trabajador_contratos` para soportar múltiples contratos por trabajador.
+- **RPC `upsert_trabajador_completo` actualizada**: Ahora inserta contratos en `trabajador_contratos` en lugar de la columna eliminada, manteniendo compatibilidad con el envío de `contrato_codigo` en `p_datos`.
+- **Campo de contrato visible en edición**: Nuevo método `fetchContratoCodigoByTrabajadorId()` en `TrabajadorService` que consulta desde la tabla intermedia. Las 3 pantallas de edición (`EditarTrabajadorScreen`, `RegistroTrabajadorScreen`, `RegistroHSEPersonalScreen`) cargan el contrato automáticamente al abrir.
+
+### Correcciones
+- **Error 42804 (NULL::date)**: Corregido casteo explícito a `DATE` en migración de códigos legacy.
+- **Error 2BP01 (vistas dependientes)**: Las vistas `v_cumplimiento_silver` y `v_dashboard_cumplimiento_gold` se dropean antes de eliminar la columna y se recrean después.
+- **Error 400 en SELECT directo a `trabajadores`**: Eliminado `contrato_codigo` de las consultas directas en `TrabajadorService.fetchAllTrabajadores()` y `fetchDatosExportacion()`.
+- **Error 400 en INSERT directo**: `Trabajador.toJson()` ya no incluye `contrato_codigo` en el mapa de datos.
+- **Error PGRST205 en RPC**: La RPC ya no intenta insertar `contrato_codigo` en la tabla `trabajadores`.
+
+### Archivos nuevos
+- `sql/09_contratos_multicontrato.sql` — Migración completa de contratos (tablas, datos, limpieza, vistas, RLS)
+
+### Archivos modificados
+- `sql/06_rpc_upsert_trabajador_completo.sql` — INSERT redirigido a `trabajador_contratos`
+- `lib/models/trabajador_model.dart` — `toJson()` sin `contrato_codigo`
+- `lib/services/trabajador_service.dart` — SELECT sin `contrato_codigo` + nuevo método `fetchContratoCodigoByTrabajadorId()`
+- `lib/screens/editar_trabajador_screen.dart` — Carga asíncrona del contrato desde tabla intermedia
+- `lib/screens/registro_trabajador_screen.dart` — Carga asíncrona del contrato desde tabla intermedia
+- `lib/screens/registro_hse_personal_screen.dart` — Carga asíncrona del contrato desde tabla intermedia
+
+---
+
 ## [V0.6] - 2026-06-25
 
 ### Funcionalidades y mejoras

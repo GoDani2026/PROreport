@@ -15,13 +15,15 @@ Ejecutar **un solo archivo** en el Supabase SQL Editor:
 Este script incluye:
 - ✅ **DROP TABLE IF EXISTS ... CASCADE** para limpiar esquemas parciales anteriores del MVP
 - ✅ Tablas: `perfiles`, `trabajadores`, `requisitos_hse`, `cumplimiento_trabajadores`
+- ✅ Tablas: `contratos`, `trabajador_contratos` (soporte multi-contrato)
 - ✅ Tablas: `tipos_incidente`, `areas`, `incidentes`, `acciones_correctivas`
+- ✅ Tabla: `detecciones_peligro` (módulo de peligros con RLS por contrato)
 - ✅ Tabla de auditoría: `auditoria_cumplimiento`
 - ✅ Triggers de actualización automática (`updated_at`)
 - ✅ Triggers de auditoría y validación de consistencia
 - ✅ Vistas Silver/Gold para analítica
 - ✅ RPCs transaccionales (ACID)
-- ✅ Row Level Security completo
+- ✅ Row Level Security completo con bypass superadmin
 
 ---
 
@@ -82,7 +84,20 @@ sql/
 ├── FULL_SCHEMA_PROreport.sql              ← 🔥 Esquema completo (recomendado)
 ├── 01_schema_autenticacion.sql            ← Auth + perfiles + trabajador_id
 ├── 02_schema_gestion_personal.sql         ← Trabajadores + cumplimiento HSE
-└── 03_schema_solicitud_levantamiento.sql  ← Incidentes + tipos + áreas + acciones
+├── 03_schema_solicitud_levantamiento.sql  ← Incidentes + tipos + áreas + acciones
+├── 06_rpc_upsert_trabajador_completo.sql  ← RPC carga masiva atomica
+├── 07_schema_detecciones_peligro.sql      ← Módulo detecciones de peligro
+├── 09_contratos_multicontrato.sql         ← Migracion multi-contrato
+├── 10_add_contrato_to_detecciones.sql     ← Migracion area → contrato
+├── archive/                               ← Scripts obsoletos (histórico)
+│   ├── 04_fix_rls_policies.sql
+│   ├── 05_fix_cumplimiento_orphans.sql
+│   ├── 08_fix_areas_rls.sql
+│   ├── fix_contratos_agresivo.sql
+│   ├── fix_rls_contratos.sql
+│   └── diagnostico_contratos.sql
+└── tools/
+    └── set_superadmin.sql                 ← Asignar rol superadmin
 ```
 
 ---
@@ -95,3 +110,6 @@ sql/
 - **FK consistentes**: `incidentes.usuario_reportante_id` → `perfiles.id` (UUID). `incidentes.supervisor_trabajador_id` → `trabajadores.id` (INTEGER).
 - **Idempotencia**: Todos los scripts usan `CREATE TABLE IF NOT EXISTS` y `DROP POLICY IF EXISTS`, por lo que se pueden re-ejecutar sin dañar datos existentes.
 - **Bucket de Storage**: Crear manualmente el bucket `incidentes_storage` en Supabase Storage para las fotos de incidentes.
+- **Multi-contrato**: Los trabajadores pueden estar asignados a múltiples contratos mediante `trabajador_contratos`.
+- **Detecciones por contrato**: El módulo de detecciones de peligro usa `contrato_codigo` (no `area_id`) con RLS que filtra por contratos del usuario.
+- **Superadmin bypass**: El rol `superadmin` en `perfiles.rol` ignora restricciones RLS y ve todos los contratos.

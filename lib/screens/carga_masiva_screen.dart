@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import '../services/trabajador_service.dart';
 import '../utils/validators.dart';
 import '../widgets/collapsible_sidebar.dart';
 import '../config/theme_context_ext.dart';
+import '../providers/auth_provider.dart';
 
 const _maxLote = 500;
 
@@ -27,15 +29,11 @@ List<String> _columnasTabla() {
 }
 
 String _formatearRut(String raw) {
-  // 1. Reemplazar comas por puntos (ej: "201,261,406" -> "201.261.406")
   String rut = raw.replaceAll(',', '.');
-  // 2. Eliminar puntos, guiones y espacios para obtener solo dígitos + DV
   final limpio = rut.replaceAll('.', '').replaceAll('-', '').replaceAll(' ', '').toUpperCase();
   if (limpio.length < 2) return raw;
-  // 3. Separar DV (último carácter) del cuerpo numérico
   final dv = limpio.substring(limpio.length - 1);
   final cuerpo = limpio.substring(0, limpio.length - 1);
-  // 4. Formatear cuerpo con puntos desde la DERECHA (ej: 24315442 -> 24.315.442)
   final partes = <String>[];
   String temp = cuerpo;
   while (temp.length > 3) {
@@ -49,12 +47,10 @@ String _formatearRut(String raw) {
 
 String? _validarYFormatearRut(dynamic raw) {
   if (raw == null) return null;
-  // Primero reemplazar comas por puntos (ej: "201,261,406" -> "201.261.406")
   String str = raw.toString().trim().replaceAll(',', '.');
   if (str.isEmpty) return null;
   final limpio = str.replaceAll('.', '').replaceAll('-', '').replaceAll(' ', '').toUpperCase();
   if (limpio.length < 8 || limpio.length > 9) return null;
-  // DV válidos: solo 0-9 o K (estándar chileno)
   if (!RegExp(r'^\d+[\dK]$').hasMatch(limpio)) return null;
   return _formatearRut(limpio);
 }
@@ -117,6 +113,7 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
   String? _archivoNombre;
   Uint8List? _archivoBytes;
   List<_FilaDiff> _filas = [];
+  String? _contratoSeleccionado;
   int _validos = 0, _nuevos = 0, _modificados = 0, _sinCambios = 0, _invalidos = 0;
   bool _soloInsertarNuevos = false;
 
@@ -170,31 +167,70 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
     ],
   );
 
-  Widget _buildHeader() => Container(
-    padding: const EdgeInsets.fromLTRB(24, 14, 24, 10),
-    decoration: BoxDecoration(color: ctx.surfaceCard, border: Border(bottom: BorderSide(color: ctx.borderColor, width: 1))),
-    child: Row(
-      children: [
-        IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: ctx.textSecondary),
-          onPressed: () {
-            if (_paso == 1 || _resultadoMensaje != null) {
-              Navigator.pop(context);
-            } else if (_filas.isNotEmpty && _paso > 1) {
-              setState(() { _paso--; _errorGeneral = null; });
-            }
-          },
-        ),
-        const SizedBox(width: 4),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Carga Masiva de Personal', style: TextStyle(color: ctx.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 2),
-          Text(_tituloPaso(), style: TextStyle(color: ctx.textSecondary, fontSize: 11)),
-        ])),
-        _StepperIndicator(pasoActual: _paso, ctx: ctx),
-      ],
-    ),
-  );
+  Widget _buildHeader() {
+    final auth = context.watch<AuthProvider>();
+    final contratosDisponibles = auth.contratosUsuario;
+    
+    _contratoSeleccionado ??= auth.contratoSeleccionadoContexto;
+    
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 14, 24, 10),
+      decoration: BoxDecoration(color: ctx.surfaceCard, border: Border(bottom: BorderSide(color: ctx.borderColor, width: 1))),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: ctx.textSecondary),
+            onPressed: () {
+              if (_paso == 1 || _resultadoMensaje != null) {
+                Navigator.pop(context);
+              } else if (_filas.isNotEmpty && _paso > 1) {
+                setState(() { _paso--; _errorGeneral = null; });
+              }
+            },
+          ),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Carga Masiva de Personal', style: TextStyle(color: ctx.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(_tituloPaso(), style: TextStyle(color: ctx.textSecondary, fontSize: 11)),
+          ])),
+          if (contratosDisponibles.length > 1)
+            Container(
+              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: ctx.surfaceCard,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: ctx.borderColor, width: 0.5),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _contratoSeleccionado,
+                  icon: Icon(Icons.swap_vert, size: 16, color: ctx.textSecondary),
+                  style: TextStyle(color: ctx.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                  onChanged: (val) {
+                    if (val != null && mounted) {
+                      setState(() {
+                        _contratoSeleccionado = val;
+                        for (final fila in _filas) {
+                          fila.datosArchivo['contrato_codigo'] = val;
+                        }
+                      });
+                    }
+                  },
+                  items: contratosDisponibles.map((codigo) {
+                    return DropdownMenuItem(
+                      value: codigo,
+                      child: Text(codigo, style: TextStyle(fontSize: 12)),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          _StepperIndicator(pasoActual: _paso, ctx: ctx),
+        ],
+      ),
+    );
+  }
 
   String _tituloPaso() {
     if (_resultadoMensaje != null) return 'Resultado';
@@ -290,7 +326,30 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
                 DataCell(Text(d['apellido_materno'] ?? '', style: TextStyle(color: ctx.textPrimary))),
                 DataCell(Text(d['cargo'] ?? '', style: TextStyle(color: ctx.textPrimary))),
                 DataCell(Text(d['nacionalidad'] ?? '', style: TextStyle(color: ctx.textPrimary))),
-                DataCell(Text(d['fecha_vencimiento_residencia'] ?? '', style: TextStyle(color: ctx.textPrimary))),
+                DataCell(() {
+                  // Verificar si hay error de fecha en Venc.Residencia
+                  final vencResVal = d['fecha_vencimiento_residencia'] ?? '';
+                  final tieneErrorVencRes = f.erroresValidacion.any((e) => e.startsWith('Venc.Residencia:'));
+                  if (tieneErrorVencRes) {
+                    return GestureDetector(
+                      onTap: () => _mostrarDialogoCorreccion(f),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: ctx.errorRed.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: ctx.errorRed.withValues(alpha: 0.4), width: 0.5),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.warning_amber_rounded, color: ctx.errorRed, size: 12),
+                          const SizedBox(width: 2),
+                          Text('$vencResVal', style: TextStyle(color: ctx.errorRed, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ]),
+                      ),
+                    );
+                  }
+                  return Text('$vencResVal', style: TextStyle(color: ctx.textPrimary));
+                }()),
                 DataCell(Text(d['sexo'] ?? '', style: TextStyle(color: ctx.textPrimary))),
                 DataCell(Text(d['turno'] ?? '', style: TextStyle(color: ctx.textPrimary))),
                 DataCell(Text(d['contrato_codigo'] ?? '', style: TextStyle(color: ctx.textPrimary))),
@@ -299,11 +358,59 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
                   final estado = ri < f.cumplimientoArchivo.length
                       ? (f.cumplimientoArchivo[ri]['valor_estado'] as String)
                       : 'N/A';
-                  return DataCell(Text(
-                    estado == 'VIGENTE' ? 'V' : (estado == 'VENCIDO' ? 'X' : '-'),
-                    style: TextStyle(
-                      color: estado == 'VIGENTE' ? ctx.successGreen : (estado == 'VENCIDO' ? ctx.errorRed : ctx.textMuted),
-                      fontWeight: estado == 'VIGENTE' ? FontWeight.bold : FontWeight.normal,
+                  final errorFecha = ri < f.cumplimientoArchivo.length
+                      ? (f.cumplimientoArchivo[ri]['error_fecha'] == true)
+                      : false;
+                  final rawValue = ri < f.cumplimientoArchivo.length
+                      ? (f.cumplimientoArchivo[ri]['raw_value'] as String? ?? '')
+                      : '';
+
+                  // Si hay error en la fecha, mostrar celda editable con advertencia visual
+                  if (errorFecha) {
+                    return DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: ctx.errorRed.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: ctx.errorRed.withValues(alpha: 0.4), width: 0.5),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.warning_amber_rounded, color: ctx.errorRed, size: 12),
+                          const SizedBox(width: 2),
+                          Text(
+                            estado == 'VIGENTE' ? 'V' : (estado == 'VENCIDO' ? 'X' : '-'),
+                            style: TextStyle(
+                              color: estado == 'VIGENTE' ? ctx.successGreen : (estado == 'VENCIDO' ? ctx.errorRed : ctx.textMuted),
+                              fontWeight: estado == 'VIGENTE' ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 10,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          IconButton(
+                            icon: Icon(Icons.edit_rounded, color: ctx.accentOrange, size: 14),
+                            onPressed: () => _corregirFechaRequisito(idx, ri),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                            tooltip: '⚠️ Fecha inválida: "$rawValue" — toca para corregir',
+                          ),
+                        ]),
+                      ),
+                    );
+                  }
+
+                  // Tooltip con el valor original del Excel
+                  final displayText = estado == 'VIGENTE' ? 'V' : (estado == 'VENCIDO' ? 'X' : '-');
+                  final tooltipMsg = rawValue.isNotEmpty ? 'Valor original: "$rawValue"' : 'Vacío en Excel';
+                  return DataCell(Tooltip(
+                    message: tooltipMsg,
+                    triggerMode: TooltipTriggerMode.tap,
+                    child: Text(
+                      displayText,
+                      style: TextStyle(
+                        color: estado == 'VIGENTE' ? ctx.successGreen : (estado == 'VENCIDO' ? ctx.errorRed : ctx.textMuted),
+                        fontWeight: estado == 'VIGENTE' ? FontWeight.bold : FontWeight.normal,
+                      ),
                     ),
                   ));
                 }),
@@ -331,7 +438,7 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
           child: Row(children: [
             Icon(Icons.edit_rounded, color: ctx.accentOrange, size: 18),
             const SizedBox(width: 8),
-            Expanded(child: Text('Toca el RUT en rojo para corregir datos', style: TextStyle(color: ctx.textPrimary, fontSize: 12))),
+            Expanded(child: Text('Toca el RUT en rojo para corregir datos o las fechas inválidas en los requisitos', style: TextStyle(color: ctx.textPrimary, fontSize: 12))),
           ]),
         ),
       Row(children: [
@@ -367,6 +474,51 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       const SizedBox(width: 4),
       Text(texto, style: TextStyle(color: ctx.textSecondary, fontSize: 11)),
     ]);
+  }
+
+  Future<void> _corregirFechaRequisito(int filaIdx, int reqIdx) async {
+    final f = _filas[filaIdx];
+    final fechaActualStr = f.cumplimientoArchivo[reqIdx]['fecha_vencimiento'] as String?;
+    final fechaInicial = fechaActualStr != null
+        ? DateTime.tryParse(fechaActualStr) ?? DateTime.now()
+        : DateTime.now();
+
+    final fechaSeleccionada = await showDatePicker(
+      context: context,
+      initialDate: fechaInicial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (fechaSeleccionada != null && mounted) {
+      final fechaStr = fechaSeleccionada.toIso8601String().split('T')[0];
+      final nuevoEstado = fechaSeleccionada.isAfter(DateTime.now()) ? 'VIGENTE' : 'VENCIDO';
+      
+      // Reemplazar toda la lista para forzar detección de cambios en DataTable
+      final filasNuevas = List<_FilaDiff>.from(_filas);
+      final cumNuevo = Map<String, dynamic>.from(filasNuevas[filaIdx].cumplimientoArchivo[reqIdx]);
+      cumNuevo['fecha_vencimiento'] = fechaStr;
+      cumNuevo['valor_estado'] = nuevoEstado;
+      cumNuevo['error_fecha'] = false;
+      cumNuevo['raw_value'] = fechaStr;
+      
+      final cumplimientosNuevos = List<Map<String, dynamic>>.from(filasNuevas[filaIdx].cumplimientoArchivo);
+      cumplimientosNuevos[reqIdx] = cumNuevo;
+      filasNuevas[filaIdx].cumplimientoArchivo = cumplimientosNuevos;
+      
+      filasNuevas[filaIdx].erroresValidacion = List<String>.from(
+        filasNuevas[filaIdx].erroresValidacion.where((e) => !e.startsWith('Req ${reqIdx + 1}:')),
+      );
+      
+      if (filasNuevas[filaIdx].erroresValidacion.isEmpty && filasNuevas[filaIdx].tipo == _TipoCambio.invalido) {
+        filasNuevas[filaIdx].tipo = _TipoCambio.nuevo;
+      }
+      
+      setState(() {
+        _filas = filasNuevas;
+        _recalcular();
+      });
+    }
   }
 
   Future<void> _mostrarDialogoCorreccion(_FilaDiff f) async {
@@ -432,7 +584,6 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
         if ((f.datosArchivo['cargo'] ?? '').isEmpty) {
           f.erroresValidacion.add('Cargo obligatorio');
         }
-        // Si después de corregir ya no hay errores, cambiar estado a nuevo
         if (f.erroresValidacion.isEmpty && f.tipo == _TipoCambio.invalido) {
           f.tipo = _TipoCambio.nuevo;
         }
@@ -536,6 +687,7 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
 
   ({Map<String, dynamic> datos, List<Map<String, dynamic>> cumplimientos, List<String> errores}) _mapearFila(List<String> cols) {
     String getCol(int idx) => idx < cols.length ? cols[idx].trim() : '';
+    final contratoActual = context.read<AuthProvider>().contratoSeleccionadoContexto;
 
     final rutRaw = getCol(4);
     final rut = _validarYFormatearRut(rutRaw) ?? _formatearRut(rutRaw);
@@ -544,11 +696,28 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
     final apellidoMaterno = getCol(3);
     final cargo = getCol(5);
     final nacionalidad = getCol(6);
-    final vencRes = getCol(7);
+    final vencResRaw = getCol(7);
     final sexo = Validators.normalizarSexo(getCol(8));
     final turno = getCol(9);
 
     final errores = <String>[];
+
+    // Validar fecha_vencimiento_residencia:
+    // La columna en BD es TEXT, acepta fechas ISO, texto libre o valores como "Permanencia definitiva"
+    String vencResFormateada = vencResRaw.trim();
+    if (vencResFormateada.isNotEmpty) {
+      final parsed = Validators.parsearFechaCsv(vencResFormateada);
+      if (parsed.isNotEmpty && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(parsed)) {
+        // Es una fecha válida en ISO → usarla formateada
+        vencResFormateada = parsed;
+      } else if (vencResFormateada.toUpperCase() == 'N/A' || vencResFormateada.toUpperCase() == 'NA') {
+        // N/A → vacío
+        vencResFormateada = '';
+      }
+      // CUALQUIER otro texto (ej: "Permanencia definitiva", "PERMANENTE", texto libre)
+      // se mantiene tal cual porque la columna es TEXT en BD
+    }
+    final vencRes = vencResFormateada;
     if (Validators.validarRut(rut) == null && Validators.validarRut(rutRaw) == null) errores.add('RUT inválido (DV incorrecto según Módulo 11)');
     if (nombre.isEmpty) errores.add('Nombre obligatorio');
     if (apellidoPaterno.isEmpty) errores.add('Apellido Paterno obligatorio');
@@ -565,7 +734,7 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       'sexo': sexo,
       'turno': turno,
       'estado_trabajador': 'ACTIVO',
-      'contrato_codigo': 'SC-9500014891',
+      'contrato_codigo': contratoActual,
     };
 
     final cumplimientos = <Map<String, dynamic>>[];
@@ -575,27 +744,61 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
 
       String estado;
       String? fecha;
+      bool errorFecha = false;
 
-      final fechaStr = Validators.parsearFechaCsv(raw);
-      // Solo tratar como fecha si el string parseado tiene formato yyyy-MM-dd
-      if (fechaStr.isNotEmpty && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(fechaStr)) {
-        estado = Validators.estadoDesdeFecha(fechaStr);
-        fecha = fechaStr;
+      final esReqConFecha = i < 4;
+      final rawUpper = raw.toUpperCase().trim();
+
+      if (raw.trim().isEmpty) {
+        estado = 'N/A';
+        fecha = null;
       } else {
-        final upper = raw.toUpperCase();
-        if (upper == 'SI' || upper == 'SÍ') {
+        // Si el valor parece una fecha (contiene dígitos con / o -), intentar parsearla
+        final pareceFecha = RegExp(r'\d').hasMatch(raw) && (raw.contains('/') || raw.contains('-'));
+        if (pareceFecha) {
+          final fechaStr = Validators.parsearFechaCsv(raw);
+          if (fechaStr.isNotEmpty && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(fechaStr) && DateTime.tryParse(fechaStr) != null) {
+            estado = Validators.estadoDesdeFecha(fechaStr);
+            fecha = fechaStr;
+          } else if (rawUpper == 'N/A' || rawUpper == 'NA') {
+            estado = 'N/A';
+            fecha = null;
+          } else {
+            estado = 'N/A';
+            fecha = null;
+            errorFecha = true;
+            if (!errores.contains('Req $requisitoId: fecha inválida "$raw"')) {
+              errores.add('Req $requisitoId: fecha inválida "$raw"');
+            }
+          }
+        } else if (rawUpper == 'SI' || rawUpper == 'SÍ') {
           estado = 'VIGENTE';
           fecha = null;
-        } else if (upper == 'NO' || upper == 'N/A' || upper == 'NA' || upper.isEmpty) {
+        } else if (rawUpper == 'N/A' || rawUpper == 'NA' || rawUpper == 'NO APLICA') {
+          // N/A explícito: el requisito no aplica, NO marcar como vencido
           estado = 'N/A';
           fecha = null;
+          errorFecha = false;
         } else {
-          estado = 'VENCIDO';
+          // Texto plano no interpretable como fecha, SI ni N/A
+          if (esReqConFecha) {
+            estado = 'VENCIDO';
+          } else {
+            estado = 'N/A';
+          }
           fecha = null;
+          errorFecha = false;
         }
       }
 
-      cumplimientos.add({'requisito_id': requisitoId, 'valor_estado': estado, 'fecha_vencimiento': fecha, 'documento_url': null});
+      cumplimientos.add({
+        'requisito_id': requisitoId,
+        'valor_estado': estado,
+        'fecha_vencimiento': fecha,
+        'documento_url': null,
+        'raw_value': raw.trim(),
+        'error_fecha': errorFecha,
+      });
     }
 
     return (datos: datos, cumplimientos: cumplimientos, errores: errores);
@@ -665,7 +868,6 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       final numCols = filasRaw[hdrIdx].length;
       final allRows = filasRaw.sublist(hdrIdx + 1);
 
-      // Pad all rows to match header column count (critical for XLSX with merged cells)
       final paddedRows = allRows.map((r) {
         if (r.length >= numCols) return r;
         final padded = List<String>.from(r);
@@ -693,16 +895,6 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       if (numCols < 10) {
         setState(() { _isLoading = false; _errorGeneral = 'Cabecera con solo $numCols columnas.'; });
         return;
-      }
-
-      debugPrint('=== CABECERA: $numCols cols, ${dataRows.length} filas ===');
-      if (dataRows.isNotEmpty) {
-        debugPrint('Primera fila: ${dataRows.first.length} columnas');
-        if (dataRows.first.length > 10) {
-          debugPrint('Req cols[10-21]: ${dataRows.first.sublist(10, dataRows.first.length > 22 ? 22 : dataRows.first.length).join(" | ")}');
-        } else {
-          debugPrint('ERROR: fila solo tiene ${dataRows.first.length} columnas, no hay columnas 10-21');
-        }
       }
 
       final bdIndex = await _service.fetchTrabajadoresIndexadosPorRut();
@@ -746,7 +938,35 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
     }
   }
 
+  /// Valida que todas las fechas de cumplimientos estén en formato ISO antes de enviar.
+  /// NOTA: fecha_vencimiento_residencia es TEXT, no se valida como fecha.
+  List<String> _validarFechasPreEnvio() {
+    final erroresFecha = <String>[];
+    for (final f in _filas) {
+      if (!f.esOk) continue;
+      // Validar fechas de cumplimientos (sí son DATE en BD)
+      for (var r = 0; r < f.cumplimientoArchivo.length; r++) {
+        final c = f.cumplimientoArchivo[r];
+        final fecha = c['fecha_vencimiento'] as String?;
+        if (fecha != null && fecha.isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(fecha)) {
+          erroresFecha.add('Fila ${f.numeroFila} (${f.rut}), Req ${r + 1}: fecha inválida "$fecha"');
+        }
+      }
+    }
+    return erroresFecha;
+  }
+
   Future<void> _ejecutarCarga() async {
+    // Validación pre-envío: verificar que todas las fechas sean ISO
+    final erroresFechaPreEnvio = _validarFechasPreEnvio();
+    if (erroresFechaPreEnvio.isNotEmpty) {
+      setState(() {
+        _isLoading = false;
+        _errorGeneral = '❌ Error de fechas detectado. Revisa el Paso 2:\n${erroresFechaPreEnvio.join('\n')}';
+      });
+      return;
+    }
+
     setState(() { _isLoading = true; _errorGeneral = null; });
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
@@ -757,7 +977,6 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
         return;
       }
 
-      // Construir lista única de trabajadores (deduplicada por RUT para evitar error 500 de PostgREST)
       final trabajadoresData = <Map<String, dynamic>>[];
       final cumplimientoMap = <String, List<Map<String, dynamic>>>{};
       final rutVisto = <String>{};
@@ -777,7 +996,6 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
         return;
       }
 
-      // Carga masiva atómica vía RPC (transacción ACID en servidor)
       final lote = trabajadoresData.map((t) {
         final rut = (t['rut'] ?? '').toString().trim();
         return {
@@ -796,16 +1014,14 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       setState(() {
         _insertados = (result['total_ok'] as num?)?.toInt() ?? 0;
         _actualizados = 0;
-        _cumplimientoInsertados = _insertados * 12; // 12 reqs por trabajador
+        _cumplimientoInsertados = _insertados * 12;
         _erroresEjecucion = (result['total_err'] as num?)?.toInt() ?? 0;
 
-        // Lista de registros con error de validación (los que NO se subieron)
         final invalidos = _filas.where((f) => !f.esOk).toList();
         final detalleInvalidos = invalidos.isNotEmpty
             ? '\n❌ Registros NO subidos (error de validación):\n${invalidos.map((f) => '• Fila ${f.numeroFila}: ${f.rut ?? "N/A"} — ${f.datosArchivo['nombre']} ${f.datosArchivo['apellido_paterno']} (${f.erroresValidacion.join(", ")})').join('\n')}\n'
             : '';
 
-        // Lista de registros que se intentaron subir a la BD
         final procesados = aProcesar
             .where((f) => !_soloInsertarNuevos || f.tipo == _TipoCambio.nuevo)
             .toList();
@@ -849,21 +1065,17 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
 
   List<List<String>> _parsearXlsx(Uint8List bytes) {
     final doc = Excel.decodeBytes(bytes);
-    // Buscar la mejor sheet: priorizar "LISTADO", "HOJA1", o la primera con ≥10 columnas
     Sheet? mejorSheet;
-    String? mejorNombre;
     int mejorColumnas = 0;
     for (final entry in doc.sheets.entries) {
       final nombre = entry.key.toUpperCase();
       final s = entry.value;
       if (s.rows.isEmpty) continue;
-      // Contar columnas en la primera fila con datos
       for (final row in s.rows) {
         final count = row.where((c) => c?.value != null && c!.value.toString().trim().isNotEmpty).length;
         if (count >= 10) {
           if (nombre.contains('LISTADO') || nombre.contains('HOJA1') || count > mejorColumnas) {
             mejorSheet = s;
-            mejorNombre = entry.key;
             mejorColumnas = count;
           }
           break;
@@ -877,26 +1089,20 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       final row = filas[i];
       bool allEmpty = true;
       final rowStr = row.map((c) {
-        // Manejo robusto de null
         final cell = c;
         if (cell == null) return '';
         final dynamic rawValue = cell.value;
         if (rawValue == null) return '';
         String s;
 
-        // 1. Si el valor es un DateTime nativo de Excel, formatearlo a yyyy-MM-dd
         if (rawValue is DateTime) {
           s = '${rawValue.year}-${rawValue.month.toString().padLeft(2, '0')}-${rawValue.day.toString().padLeft(2, '0')}';
-        }
-        // 2. Detectar fecha serial de Excel (días desde 1899-12-30, rango ~45000-55000 para años 2020-2050)
-        else if (rawValue is num && rawValue >= 43830 && rawValue <= 73000) {
-          // Convertir serial number → DateTime: epoch Excel = 1899-12-30
+        } else if (rawValue is num && rawValue >= 1 && rawValue <= 73000) {
           final excelEpoch = DateTime(1899, 12, 30);
           final date = excelEpoch.add(Duration(days: rawValue.toInt()));
           s = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
         } else {
           s = rawValue.toString();
-          // Limpiar ".0" de decimales irrelevantes (ej: "45293.0" -> "45293")
           if (s.endsWith('.0')) {
             final sinDecimal = s.substring(0, s.length - 2);
             if (RegExp(r'^\d+$').hasMatch(sinDecimal)) s = sinDecimal;
@@ -909,7 +1115,6 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
       if (allEmpty) continue;
       result.add(rowStr);
     }
-    debugPrint('XLSX parseado (sheet: $mejorNombre): ${result.length} filas');
     if (result.length < 2) return [];
     return result;
   }
@@ -931,7 +1136,7 @@ class _CargaMasivaScreenState extends State<CargaMasivaScreen> {
   }
 
   static Map<String, String> _compararCampos(Map<String, dynamic> a, Map<String, dynamic> b) {
-    const campos = ['rut', 'nombre', 'apellido_paterno', 'apellido_materno', 'cargo', 'nacionalidad', 'fecha_vencimiento_residencia', 'sexo', 'turno', 'contrato_codigo', 'estado_trabajador'];
+    const campos = ['rut', 'nombre', 'apellido_paterno', 'apellido_materno', 'cargo', 'nacionalidad', 'fecha_vencimiento_residencia', 'sexo', 'turno', 'estado_trabajador'];
     final out = <String, String>{};
     for (final c in campos) {
       final va = (a[c] ?? '').toString().trim();

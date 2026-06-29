@@ -50,6 +50,8 @@ BEGIN
 
   -- ============================================================
   -- 2. UPSERT del trabajador — capturar ID real con RETURNING
+  --    NOTA: contrato_codigo ya no está en trabajadores.
+  --    Los contratos se insertan en trabajador_contratos más abajo.
   -- ============================================================
   INSERT INTO trabajadores (
     rut,
@@ -62,7 +64,6 @@ BEGIN
     sexo,
     turno,
     empresa,
-    contrato_codigo,
     estado_trabajador,
     updated_at
   ) VALUES (
@@ -76,7 +77,6 @@ BEGIN
     COALESCE(p_datos ->> 'sexo', ''),
     COALESCE(p_datos ->> 'turno', ''),
     COALESCE(p_datos ->> 'empresa', ''),
-    COALESCE(p_datos ->> 'contrato_codigo', 'SC-9500014891'),
     COALESCE(p_datos ->> 'estado_trabajador', 'ACTIVO'),
     now()
   )
@@ -90,10 +90,28 @@ BEGIN
     sexo                = EXCLUDED.sexo,
     turno               = EXCLUDED.turno,
     empresa             = EXCLUDED.empresa,
-    contrato_codigo     = EXCLUDED.contrato_codigo,
     estado_trabajador   = EXCLUDED.estado_trabajador,
     updated_at          = now()
   RETURNING id INTO v_trabajador_id;
+
+  -- ============================================================
+  -- 2b. Insertar relación contrato si se proporcionó contrato_codigo
+  -- ============================================================
+  IF p_datos ->> 'contrato_codigo' IS NOT NULL AND p_datos ->> 'contrato_codigo' != '' THEN
+    -- Asegurar que el contrato existe en la tabla maestra
+    INSERT INTO contratos (codigo, nombre, estado)
+    VALUES (
+      p_datos ->> 'contrato_codigo',
+      'Contrato ' || (p_datos ->> 'contrato_codigo'),
+      'A'
+    )
+    ON CONFLICT (codigo) DO NOTHING;
+
+    -- Insertar relación trabajador ↔ contrato
+    INSERT INTO trabajador_contratos (trabajador_id, contrato_codigo)
+    VALUES (v_trabajador_id, p_datos ->> 'contrato_codigo')
+    ON CONFLICT (trabajador_id, contrato_codigo) DO NOTHING;
+  END IF;
 
   -- ============================================================
   -- 3. UPSERT de cada cumplimiento con el ID real capturado
@@ -148,7 +166,34 @@ END;
 $$;
 
 -- ============================================================
--- FUNCIÓN AUXILIAR: upsert_trabajadores_lote
+-- FUNCIÓN AUXILIAR: validar_formato_fecha
+-- Devuelve TRUE si la cadena tiene formato yyyy-MM-dd válido.
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.validar_formato_fecha(fecha TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+BEGIN
+  IF fecha IS NULL OR fecha = '' THEN
+    RETURN TRUE; -- nulo se considera válido (se usará NULL en BD)
+  END IF;
+  -- Verificar formato yyyy-MM-dd
+  IF NOT (fecha ~ '^\d{4}-\d{2}-\d{2}$') THEN
+    RETURN FALSE;
+  END IF;
+  -- Verificar que sea una fecha real (ej: no 2024-13-01)
+  BEGIN
+    PERFORM fecha::DATE;
+    RETURN TRUE;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN FALSE;
+  END;
+END;
+$$;
+
+-- ============================================================
+-- FUNCIÓN AUXILIAR: upsert_trabajadores_lote (MEJORADA)
 -- Para carga masiva de múltiples trabajadores en una sola RPC.
 -- Recibe un array de objetos { datos: {...}, cumplimientos: [...] }
 -- y procesa cada uno en una sola transacción.
@@ -164,11 +209,14 @@ SET search_path = public
 AS $$
 DECLARE
   v_item JSONB;
+  v_rut TEXT;
+  v_fecha TEXT;
   v_resultado JSONB;
   v_resultados JSONB[] := '{}';
   v_total_ok INTEGER := 0;
   v_total_err INTEGER := 0;
   v_errores TEXT[] := '{}';
+  v_idx INTEGER := 0;
 BEGIN
   IF p_lote IS NULL OR jsonb_array_length(p_lote) = 0 THEN
     RETURN jsonb_build_object(
@@ -181,6 +229,35 @@ BEGIN
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_lote)
   LOOP
+    v_idx := v_idx + 1;
+    v_rut := COALESCE(v_item -> 'datos' ->> 'rut', 'N/A');
+
+    -- Validación PREVIA: verificar formato de fecha_vencimiento_residencia
+    v_fecha := v_item -> 'datos' ->> 'fecha_vencimiento_residencia';
+    IF v_fecha IS NOT NULL AND v_fecha != '' AND NOT public.validar_formato_fecha(v_fecha) THEN
+      v_total_err := v_total_err + 1;
+      v_errores := array_append(
+        v_errores,
+        'Item #' || v_idx || ' (RUT ' || v_rut || '): fecha_vencimiento_residencia inválida "' || v_fecha || '" — debe ser yyyy-MM-dd'
+      );
+      CONTINUE;
+    END IF;
+
+    -- Validación PREVIA: verificar formato de fechas en cumplimientos
+    DECLARE
+      v_cumplimiento JSONB;
+      v_req_id INTEGER := 0;
+    BEGIN
+      FOR v_cumplimiento IN SELECT * FROM jsonb_array_elements(COALESCE(v_item -> 'cumplimientos', '[]'::JSONB))
+      LOOP
+        v_req_id := v_req_id + 1;
+        v_fecha := v_cumplimiento ->> 'fecha_vencimiento';
+        IF v_fecha IS NOT NULL AND v_fecha != '' AND NOT public.validar_formato_fecha(v_fecha) THEN
+          RAISE EXCEPTION 'Req #%: fecha_vencimiento inválida "%" (debe ser yyyy-MM-dd)', v_req_id, v_fecha;
+        END IF;
+      END LOOP;
+    END;
+
     BEGIN
       v_resultado := public.upsert_trabajador_completo(
         p_datos              => v_item -> 'datos',
@@ -194,8 +271,7 @@ BEGIN
         v_total_err := v_total_err + 1;
         v_errores := array_append(
           v_errores,
-          'Item con rut ' || COALESCE(v_item -> 'datos' ->> 'rut', 'N/A')
-          || ': ' || COALESCE(v_resultado ->> 'error', 'error desconocido')
+          'Item #' || v_idx || ' (RUT ' || v_rut || '): ' || COALESCE(v_resultado ->> 'error', 'error desconocido')
         );
       END IF;
 
@@ -204,8 +280,7 @@ BEGIN
       v_total_err := v_total_err + 1;
       v_errores := array_append(
         v_errores,
-        'Item con rut ' || COALESCE(v_item -> 'datos' ->> 'rut', 'N/A')
-        || ': ' || SQLERRM
+        'Item #' || v_idx || ' (RUT ' || v_rut || '): ' || SQLERRM
       );
     END;
   END LOOP;

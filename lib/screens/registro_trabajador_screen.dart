@@ -48,6 +48,18 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
     super.initState();
     _precargarDatos();
     _cargarRequisitosHSE();
+    _cargarContrato();
+  }
+
+  Future<void> _cargarContrato() async {
+    final t = widget.trabajadorEdit;
+    if (t == null) return;
+    final trabajadorId = _toInt(t['id']);
+    if (trabajadorId == null) return;
+    final contrato = await _service.fetchContratoCodigoByTrabajadorId(trabajadorId);
+    if (mounted && contrato.isNotEmpty) {
+      _contratoCodigoController.text = contrato;
+    }
   }
 
   @override
@@ -86,7 +98,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
       final response = await _service.fetchRequisitosHSE();
 
       if (mounted) {
-        // Verificar que existan requisitos
         if (response.isEmpty) {
           setState(() => _isLoadingRequisitos = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -103,7 +114,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
 
         setState(() {
           _requisitos = List<Map<String, dynamic>>.from(response);
-          // Inicializar estructura de cumplimiento
           _cumplimientoData.clear();
           for (var req in _requisitos) {
             _cumplimientoData.add({
@@ -117,7 +127,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
           _isLoadingRequisitos = false;
         });
 
-        // Si estamos editando, cargar el cumplimiento existente
         if (widget.trabajadorEdit != null) {
           await _cargarCumplimientoExistente();
         }
@@ -202,7 +211,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
         'contrato_codigo': _contratoCodigoController.text.trim(),
       };
 
-      // En edición, incluir el ID existente
       if (widget.trabajadorEdit != null) {
         final editId = _toInt(widget.trabajadorEdit!['id']);
         if (editId != null) {
@@ -210,7 +218,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
         }
       }
 
-      // Guardar atómicamente usando RPC (trabajador + cumplimientos en una tx)
       final cumplimientos = _cumplimientoData.map((item) => {
         'requisito_id': item['requisito_id'],
         'valor_estado': item['valor_estado'],
@@ -295,7 +302,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
     }
   }
 
-  /// Selector unificado: botones N/A y Fecha siempre visibles (toggle).
   Widget _buildSelectorFechaYNA(int index, String? fecha, String estadoActual) {
     final esNoAplica = estadoActual == 'N/A';
     return Row(mainAxisSize: MainAxisSize.min, children: [
@@ -334,7 +340,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
     ]);
   }
 
-  /// Badge de estado coloreado (informativo)
   Widget _buildBadgeEstado(String estado) {
     final color = estado == 'VIGENTE' ? Colors.green : (estado == 'VENCIDO' ? Colors.red : Colors.orange);
     return Container(
@@ -352,7 +357,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
   }
 
   Future<void> _subirDocumento(int index) async {
-    // Funcionalidad pendiente: usar _service para subir documentos
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Subida de documentos próximamente')),
@@ -383,13 +387,6 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9kK-]')),
                 ],
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'RUT obligatorio';
-                  if (!RegExp(r'^\d{7,8}-[\dkK]$').hasMatch(value)) {
-                    return 'Formato inválido (ej: 12345678-9)';
-                  }
-                  return null;
-                },
               ),
               const SizedBox(height: 16),
 
@@ -717,7 +714,7 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
       ),
       body: Column(
         children: [
-          // Indicador de pasos manual (evita problemas de layout del Stepper nativo)
+          // Indicador de pasos manual
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Row(
@@ -729,7 +726,7 @@ class _RegistroTrabajadorScreenState extends State<RegistroTrabajadorScreen> {
             ),
           ),
           const Divider(height: 1, color: Colors.grey),
-          // Contenido del paso actual en el espacio restante
+          // Contenido del paso actual
           Expanded(
             child: _pasoActual == 0
                 ? _construirPaso1()

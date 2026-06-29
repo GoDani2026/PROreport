@@ -51,6 +51,18 @@ class _RegistroHSEPersonalScreenState extends State<RegistroHSEPersonalScreen> {
     super.initState();
     _precargarDatos();
     _cargarRequisitosHSE();
+    _cargarContrato();
+  }
+
+  Future<void> _cargarContrato() async {
+    final t = widget.trabajadorEdit;
+    if (t == null) return;
+    final trabajadorId = _toInt(t['id']);
+    if (trabajadorId == null) return;
+    final contrato = await _service.fetchContratoCodigoByTrabajadorId(trabajadorId);
+    if (mounted && contrato.isNotEmpty) {
+      _contratoCodigoController.text = contrato;
+    }
   }
 
   @override

@@ -3,12 +3,14 @@
 // ----------------------------------------------------------------
 // Representa un registro de la tabla `detecciones_peligro`.
 // Inmutable con copyWith para actualizaciones parciales.
+// NOTA: El campo area_id fue reemplazado por contrato_codigo
+//       según migración sql/10_add_contrato_to_detecciones.sql
 // ================================================================
 
 class DeteccionPeligro {
   final int? id;
   final String usuarioReportanteId;
-  final int areaId;
+  final String contratoCodigo;
   final String turno;
   final String lugarExacto;
 
@@ -39,7 +41,7 @@ class DeteccionPeligro {
   const DeteccionPeligro({
     this.id,
     required this.usuarioReportanteId,
-    required this.areaId,
+    required this.contratoCodigo,
     required this.turno,
     required this.lugarExacto,
     this.fotoEvidenciaUrl,
@@ -63,7 +65,7 @@ class DeteccionPeligro {
     return DeteccionPeligro(
       id: json['id'] as int?,
       usuarioReportanteId: json['usuario_reportante_id'] as String,
-      areaId: json['area_id'] as int,
+      contratoCodigo: json['contrato_codigo'] as String,
       turno: json['turno'] as String,
       lugarExacto: json['lugar_exacto'] as String,
       fotoEvidenciaUrl: json['foto_evidencia_url'] as String?,
@@ -98,7 +100,7 @@ class DeteccionPeligro {
     return {
       if (id != null) 'id': id,
       'usuario_reportante_id': usuarioReportanteId,
-      'area_id': areaId,
+      'contrato_codigo': contratoCodigo,
       'turno': turno,
       'lugar_exacto': lugarExacto,
       if (fotoEvidenciaUrl != null) 'foto_evidencia_url': fotoEvidenciaUrl,
@@ -123,7 +125,7 @@ class DeteccionPeligro {
   DeteccionPeligro copyWith({
     int? id,
     String? usuarioReportanteId,
-    int? areaId,
+    String? contratoCodigo,
     String? turno,
     String? lugarExacto,
     String? fotoEvidenciaUrl,
@@ -144,7 +146,7 @@ class DeteccionPeligro {
     return DeteccionPeligro(
       id: id ?? this.id,
       usuarioReportanteId: usuarioReportanteId ?? this.usuarioReportanteId,
-      areaId: areaId ?? this.areaId,
+      contratoCodigo: contratoCodigo ?? this.contratoCodigo,
       turno: turno ?? this.turno,
       lugarExacto: lugarExacto ?? this.lugarExacto,
       fotoEvidenciaUrl: fotoEvidenciaUrl ?? this.fotoEvidenciaUrl,

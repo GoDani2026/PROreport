@@ -9,6 +9,7 @@
 //   supabase.rpc('upsert_trabajador_completo', params: {...})
 // ================================================================
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'exceptions.dart';
 
@@ -30,7 +31,7 @@ class TrabajadorService {
       final res = await _db
           .from('trabajadores')
           .select(
-              'id, rut, nombre, apellido_paterno, apellido_materno, cargo, nacionalidad, fecha_vencimiento_residencia, sexo, turno, estado_trabajador, contrato_codigo')
+              'id, rut, nombre, apellido_paterno, apellido_materno, cargo, nacionalidad, fecha_vencimiento_residencia, sexo, turno, estado_trabajador')
           .order('apellido_paterno', ascending: true);
       return List<Map<String, dynamic>>.from(res);
     } on PostgrestException catch (e) {
@@ -88,6 +89,27 @@ class TrabajadorService {
       throw DatabaseException('Error al buscar ID por RUT: ${e.message}');
     } catch (e) {
       throw NetworkException('Error de conexión al buscar ID por RUT');
+    }
+  }
+
+  /// Obtiene el código de contrato de un trabajador desde la tabla intermedia.
+  /// Retorna el primer contrato encontrado o string vacío.
+  Future<String> fetchContratoCodigoByTrabajadorId(int trabajadorId) async {
+    try {
+      final res = await _db
+          .from('trabajador_contratos')
+          .select('contrato_codigo')
+          .eq('trabajador_id', trabajadorId)
+          .limit(1)
+          .maybeSingle();
+      if (res == null) return '';
+      return (res['contrato_codigo'] as String?) ?? '';
+    } on PostgrestException catch (e) {
+      debugPrint('Error al obtener contrato del trabajador $trabajadorId: ${e.message}');
+      return '';
+    } catch (e) {
+      debugPrint('Error de conexión al obtener contrato: $e');
+      return '';
     }
   }
 
@@ -156,16 +178,72 @@ class TrabajadorService {
 
   /// Obtiene los datos completos para exportación a Excel:
   /// trabajadores + cumplimiento + requisitos.
+  /// Si se proporciona [contratoCodigo], filtra solo los trabajadores de ese contrato.
   /// Retorna un mapa con tres listas.
-  Future<Map<String, List<Map<String, dynamic>>>>
-      fetchDatosExportacion() async {
+  Future<Map<String, List<Map<String, dynamic>>>> fetchDatosExportacion({String? contratoCodigo}) async {
     try {
-      final results = await Future.wait([
-        _db
+      debugPrint('=== fetchDatosExportacion: contratoCodigo="$contratoCodigo" ===');
+      // DIAGNÓSTICO: ver qué contratos existen en trabajador_contratos
+      try {
+        final todosContratos = await _db
+            .from('trabajador_contratos')
+            .select('contrato_codigo, trabajador_id')
+            .limit(5);
+        debugPrint('DIAG: primeros 5 registros de trabajador_contratos: $todosContratos');
+      } catch (e) {
+        debugPrint('DIAG: error al leer trabajador_contratos: $e');
+      }
+      try {
+        final distinctContratos = await _db
+            .from('trabajador_contratos')
+            .select('contrato_codigo');
+        final codes = <String>{};
+        for (final r in distinctContratos) {
+          final c = (r['contrato_codigo'] as String?) ?? '';
+          if (c.isNotEmpty) codes.add(c);
+        }
+        debugPrint('DIAG: códigos de contrato DISTINTOS en trabajador_contratos: $codes');
+      } catch (e) {
+        debugPrint('DIAG: error al leer códigos distintos: $e');
+      }
+      // Si hay contrato, filtrar trabajadores por contrato via trabajador_contratos
+      List<dynamic> trabajadoresRes;
+      if (contratoCodigo != null && contratoCodigo.isNotEmpty) {
+        final resIds = await _db
+            .from('trabajador_contratos')
+            .select('trabajador_id, contrato_codigo')
+            .eq('contrato_codigo', contratoCodigo);
+        debugPrint('trabajador_contratos count: ${resIds.length}');
+        final ids = resIds.map((e) {
+          final val = e['trabajador_id'];
+          if (val is int) return val;
+          if (val is num) return val.toInt();
+          if (val is String) return int.tryParse(val) ?? 0;
+          return 0;
+        }).where((id) => id > 0).toList();
+        debugPrint('IDs extraídos: $ids');
+        if (ids.isEmpty) {
+          debugPrint('No se encontraron IDs para el contrato: $contratoCodigo');
+          return { 'trabajadores': [], 'cumplimiento': [], 'requisitos': [] };
+        }
+        trabajadoresRes = await _db
             .from('trabajadores')
             .select(
-                'id, rut, nombre, apellido_paterno, apellido_materno, cargo, nacionalidad, fecha_vencimiento_residencia, sexo, turno, estado_trabajador, contrato_codigo')
-            .order('apellido_paterno', ascending: true),
+                'id, rut, nombre, apellido_paterno, apellido_materno, cargo, nacionalidad, fecha_vencimiento_residencia, sexo, turno, estado_trabajador')
+            .inFilter('id', ids)
+            .order('apellido_paterno', ascending: true);
+        debugPrint('trabajadores filtrados count: ${trabajadoresRes.length}');
+      } else {
+        debugPrint('Sin contrato, cargando TODOS los trabajadores');
+        trabajadoresRes = await _db
+            .from('trabajadores')
+            .select(
+                'id, rut, nombre, apellido_paterno, apellido_materno, cargo, nacionalidad, fecha_vencimiento_residencia, sexo, turno, estado_trabajador')
+            .order('apellido_paterno', ascending: true);
+        debugPrint('trabajadores total count: ${trabajadoresRes.length}');
+      }
+      final results = await Future.wait([
+        Future.value(trabajadoresRes),
         _db
             .from('cumplimiento_trabajadores')
             .select('trabajador_id, requisito_id, valor_estado, fecha_vencimiento'),
@@ -173,11 +251,11 @@ class TrabajadorService {
       ]);
       return {
         'trabajadores':
-            (results[0] as List).map((e) => Map<String, dynamic>.from(e)).toList(),
+            List.from(results[0]).map((e) => Map<String, dynamic>.from(e)).toList(),
         'cumplimiento':
-            (results[1] as List).map((e) => Map<String, dynamic>.from(e)).toList(),
+            List.from(results[1]).map((e) => Map<String, dynamic>.from(e)).toList(),
         'requisitos':
-            (results[2] as List).map((e) => Map<String, dynamic>.from(e)).toList(),
+            List.from(results[2]).map((e) => Map<String, dynamic>.from(e)).toList(),
       };
     } on PostgrestException catch (e) {
       throw DatabaseException('Error al cargar datos de exportación: ${e.message}');

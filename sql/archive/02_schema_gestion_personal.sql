@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS trabajadores (
   sexo text DEFAULT '',
   turno text DEFAULT '',
   empresa text DEFAULT '',
-  contrato_codigo text DEFAULT 'SC-9500014891',
   estado_trabajador text NOT NULL DEFAULT 'ACTIVO' CHECK (estado_trabajador IN ('ACTIVO', 'DESVINCULADO', 'LICENCIA')),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
@@ -132,7 +131,6 @@ CREATE POLICY "Solo admin/supervisor actualiza cumplimiento"
 -- ÍNDICES para optimizar consultas frecuentes
 CREATE INDEX IF NOT EXISTS idx_trabajadores_rut ON trabajadores(rut);
 CREATE INDEX IF NOT EXISTS idx_trabajadores_estado ON trabajadores(estado_trabajador);
-CREATE INDEX IF NOT EXISTS idx_trabajadores_contrato ON trabajadores(contrato_codigo);
 CREATE INDEX IF NOT EXISTS idx_cumplimiento_trabajador ON cumplimiento_trabajadores(trabajador_id);
 CREATE INDEX IF NOT EXISTS idx_cumplimiento_requisito ON cumplimiento_trabajadores(requisito_id);
 CREATE INDEX IF NOT EXISTS idx_cumplimiento_estado ON cumplimiento_trabajadores(valor_estado);

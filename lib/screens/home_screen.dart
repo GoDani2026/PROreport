@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/theme_context_ext.dart';
 import '../widgets/collapsible_sidebar.dart';
 import '../widgets/pressable_tile.dart';
+import '../widgets/app_header.dart';
 import 'solicitud_levantamiento_screen.dart';
 import 'gestion_personal_screen.dart';
 import 'deteccion_peligro_screen.dart';
@@ -91,7 +92,12 @@ class _WebDashboard extends StatelessWidget {
       ],
       child: Column(
         children: [
-          _buildWebHeader(ctx),
+          AppHeader(
+            title: 'Dashboard HSE',
+            subtitle: 'Panel de control en tiempo real',
+            icon: Icons.dashboard_rounded,
+            showLogo: true,
+          ),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -124,7 +130,11 @@ class _MobileDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const _MobileHeader(),
+        AppHeader(
+          title: 'ProReport',
+          icon: Icons.assessment_rounded,
+          showLogo: false,
+        ),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -149,122 +159,7 @@ class _MobileDashboard extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
 // DASHBOARD HEADER (Web)
-// ══════════════════════════════════════════════════════════════
-Widget _buildWebHeader(BuildContext ctx) {
-  return Container(
-    padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-    decoration: BoxDecoration(
-      border: Border(
-        bottom: BorderSide(color: ctx.dividerColor, width: 1),
-      ),
-    ),
-    child: Row(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Image.asset(
-            'Logo.png',
-            width: 28,
-            height: 28,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => Icon(
-              Icons.assessment_rounded,
-              color: ctx.accentOrange,
-              size: 28,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Dashboard HSE',
-              style: ctx.headingLg,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Panel de control en tiempo real',
-              style: TextStyle(color: ctx.textSecondary, fontSize: 12),
-            ),
-          ],
-        ),
-        const Spacer(),
-        _HeaderBadge(
-            icon: Icons.shield_rounded, label: 'Seguro', color: ctx.successGreen),
-        const SizedBox(width: 12),
-        _HeaderBadge(
-            icon: Icons.notifications_none_rounded,
-            label: '3',
-            color: ctx.warningYellow),
-        const SizedBox(width: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: ctx.surfaceCard,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.calendar_today_rounded,
-                  color: ctx.textMuted, size: 14),
-              const SizedBox(width: 6),
-              Text('14 Jun 2026',
-                  style: TextStyle(
-                      color: ctx.textSecondary, fontSize: 12)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        CircleAvatar(
-            radius: 18,
-            backgroundColor: ctx.accentOrange,
-            child: const Icon(Icons.person, color: Colors.white, size: 20)),
-      ],
-    ),
-  );
-}
-
-class _HeaderBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _HeaderBadge(
-      {required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6.0),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// KPI ROW (Web)
-// ══════════════════════════════════════════════════════════════
 class _KpiRow extends StatelessWidget {
   const _KpiRow();
 
@@ -681,49 +576,6 @@ class _TrendChartPainter extends CustomPainter {
 // ══════════════════════════════════════════════════════════════
 // MOBILE COMPONENTS
 // ══════════════════════════════════════════════════════════════
-class _MobileHeader extends StatelessWidget {
-  const _MobileHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    final ctx = context;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: BoxDecoration(
-        border: Border(
-            bottom: BorderSide(color: ctx.dividerColor, width: 0.5)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.assessment_rounded,
-              color: ctx.accentOrange, size: 22),
-          const SizedBox(width: 8),
-          Text('ProReport',
-              style: TextStyle(
-                  color: ctx.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold)),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: ctx.warningYellow.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6.0),
-            ),
-            child: Icon(Icons.notifications_none_rounded,
-                color: ctx.warningYellow, size: 18),
-          ),
-          const SizedBox(width: 8),
-          CircleAvatar(
-              radius: 14,
-              backgroundColor: ctx.accentOrange,
-              child: const Icon(Icons.person, color: Colors.white, size: 14)),
-        ],
-      ),
-    );
-  }
-}
-
 class _MobileKpiCards extends StatelessWidget {
   const _MobileKpiCards();
 

@@ -19,11 +19,11 @@ extension ThemeContextExtension on BuildContext {
   // ── Texto ───────────────────────────────────────────────────
   Color get textPrimary => isDarkMode ? const Color(0xFFECEFF1) : const Color(0xFF1A1A2E);
   Color get textSecondary => isDarkMode ? const Color(0xFF90A4AE) : const Color(0xFF5C6B7A);
-  Color get textMuted => isDarkMode ? const Color(0xFF607D8B) : const Color(0xFF9E9E9E);
+  Color get textMuted => isDarkMode ? const Color(0xFF607D8B) : const Color(0xFF4F4F4F); 
 
   // ── Colores semáforo (con variante oscura para contraste) ───
   Color get successGreen => const Color(0xFF00E676);
-  Color get warningYellow => const Color(0xFFFFC107);
+  Color get warningYellow =>  isDarkMode ?  const Color(0xFFFFC107) : const Color.fromARGB(255, 248, 219, 1);
   Color get errorRed => const Color(0xFFFF5252);
   Color get accentOrange => const Color(0xFFFF6B35);
   Color get accentBlue => isDarkMode ? const Color(0xFF42A5F5) : const Color(0xFF1B3A5C);

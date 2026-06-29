@@ -111,6 +111,7 @@ class PeligrosService {
   }
 
   /// Obtiene el listado de áreas activas para selects.
+  @Deprecated('Las áreas fueron reemplazadas por contrato_codigo. Usar AuthProvider.contratosUsuario.')
   Future<List<Map<String, dynamic>>> fetchAreas() async {
     try {
       final res = await _db
@@ -246,6 +247,7 @@ class PeligrosService {
       await _db.rpc('cerrar_peligro', params: {
         'p_deteccion_id': deteccionId,
         'p_resumen_cierre': resumenCierre,
+        // ignore: use_null_aware_elements
         if (fotoCierreUrl != null) 'p_foto_cierre_url': fotoCierreUrl,
       });
     } on PostgrestException catch (e) {

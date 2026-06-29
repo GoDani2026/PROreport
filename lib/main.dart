@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
@@ -10,6 +11,7 @@ import 'providers/cumplimiento_provider.dart';
 import 'providers/peligro_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/peligros_service.dart';
+import 'services/storage_service.dart';
 import 'services/supabase_setup_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -67,7 +69,7 @@ class _ProReportAppWithThemeState extends State<_ProReportAppWithTheme> {
       providers: [
         ChangeNotifierProvider(
           create: (_) =>
-              IncidenteProvider(client)
+              IncidenteProvider(client, StorageService(client))
                 ..loadCatalogos(),
         ),
         ChangeNotifierProvider(
@@ -77,12 +79,25 @@ class _ProReportAppWithThemeState extends State<_ProReportAppWithTheme> {
           create: (_) => CumplimientoProvider(client),
         ),
         ChangeNotifierProvider(
-          create: (_) => PeligroProvider(PeligrosService(client: client)),
+          create: (_) => PeligroProvider(
+            PeligrosService(client: client),
+            StorageService(client),
+          ),
         ),
       ],
       child: MaterialApp(
         title: 'PROreport',
         debugShowCheckedModeBanner: false,
+        locale: const Locale('es', 'CL'),
+        supportedLocales: const [
+          Locale('es', 'CL'),
+          Locale('en', 'US'),
+        ],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: themeProvider.themeMode,

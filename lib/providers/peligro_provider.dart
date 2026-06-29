@@ -3,24 +3,26 @@
 // ----------------------------------------------------------------
 // ChangeNotifier que maneja el estado del formulario de creación
 // y el flujo de seguimiento/cierre de detecciones de peligro.
+// NOTA: El campo area_id fue reemplazado por contrato_codigo.
 // ================================================================
 
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/deteccion_peligro_model.dart';
 import '../services/peligros_service.dart';
+import '../services/storage_service.dart';
 
 class PeligroProvider extends ChangeNotifier {
   final PeligrosService _service;
+  final StorageService _storageService;
 
-  PeligroProvider(PeligrosService service) : _service = service;
+  PeligroProvider(PeligrosService service, StorageService storageService)
+      : _service = service,
+        _storageService = storageService;
 
   // ═══════════════════════════════════════════════════════════════
   // ESTADO - Catálogos
   // ═══════════════════════════════════════════════════════════════
-
-  List<Map<String, dynamic>> _areas = [];
-  List<Map<String, dynamic>> get areas => _areas;
 
   List<Map<String, dynamic>> _supervisores = [];
   List<Map<String, dynamic>> get supervisores => _supervisores;
@@ -35,8 +37,8 @@ class PeligroProvider extends ChangeNotifier {
   // ESTADO - Formulario de Creación
   // ═══════════════════════════════════════════════════════════════
 
-  int? _selectedAreaId;
-  int? get selectedAreaId => _selectedAreaId;
+  String? _selectedContratoCodigo;
+  String? get selectedContratoCodigo => _selectedContratoCodigo;
 
   String _lugarExacto = '';
   String get lugarExacto => _lugarExacto;
@@ -81,7 +83,6 @@ class PeligroProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _areas = await _service.fetchAreas();
       _supervisores = await _service.fetchSupervisores();
     } catch (e) {
       _errorMessage = 'Error al cargar catálogos: $e';
@@ -105,8 +106,8 @@ class PeligroProvider extends ChangeNotifier {
   // MÉTODOS - Formulario de Creación
   // ═══════════════════════════════════════════════════════════════
 
-  void setAreaId(int? id) {
-    _selectedAreaId = id;
+  void setContratoCodigo(String? codigo) {
+    _selectedContratoCodigo = codigo;
     notifyListeners();
   }
 
@@ -158,7 +159,9 @@ class PeligroProvider extends ChangeNotifier {
 
   /// Valida que los campos obligatorios del formulario estén completos.
   String? validateForm() {
-    if (_selectedAreaId == null) return 'Debe seleccionar un área.';
+    if (_selectedContratoCodigo == null || _selectedContratoCodigo!.trim().isEmpty) {
+      return 'Debe seleccionar un código de contrato.';
+    }
     if (_lugarExacto.trim().isEmpty) return 'Debe indicar el lugar exacto.';
     if (_nivelAtencionLgf == null) {
       return 'Debe seleccionar el nivel de atención LGF.';
@@ -183,23 +186,19 @@ class PeligroProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Subir foto de evidencia si existe
+      // 1. Subir foto de evidencia al bucket 'evidencias' con subcarpeta 'detecciones_peligro'
       String? fotoUrl = _fotoEvidenciaUrl;
       if (_fotoEvidencia != null) {
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final extension = _fotoEvidencia!.name.split('.').last;
-        final bucketPath =
-            'detecciones_peligro/evidencia/${usuarioReportanteId}_$timestamp.$extension';
-        fotoUrl = await _service.uploadFoto(
-          filePath: _fotoEvidencia!.path,
-          bucketPath: bucketPath,
+        fotoUrl = await _storageService.uploadEvidencia(
+          _fotoEvidencia!,
+          'detecciones_peligro',
         );
       }
 
       // 2. Crear modelo de detección
       final deteccion = DeteccionPeligro(
         usuarioReportanteId: usuarioReportanteId,
-        areaId: _selectedAreaId!,
+        contratoCodigo: _selectedContratoCodigo!,
         turno: turno,
         lugarExacto: _lugarExacto.trim(),
         fotoEvidenciaUrl: fotoUrl,
@@ -229,7 +228,7 @@ class PeligroProvider extends ChangeNotifier {
 
   /// Resetea el formulario de creación.
   void resetForm() {
-    _selectedAreaId = null;
+    _selectedContratoCodigo = null;
     _lugarExacto = '';
     _fotoEvidencia = null;
     _fotoEvidenciaUrl = null;
@@ -306,13 +305,10 @@ class PeligroProvider extends ChangeNotifier {
       // Subir foto de cierre si existe
       String? fotoCierreUrl;
       if (fotoCierrePath != null) {
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final extension = fotoCierrePath.split('.').last;
-        final bucketPath =
-            'detecciones_peligro/cierre/${deteccionId}_$timestamp.$extension';
-        fotoCierreUrl = await _service.uploadFoto(
-          filePath: fotoCierrePath,
-          bucketPath: bucketPath,
+        final xfile = XFile(fotoCierrePath);
+        fotoCierreUrl = await _storageService.uploadEvidencia(
+          xfile,
+          'detecciones_peligro/cierre',
         );
       }
 

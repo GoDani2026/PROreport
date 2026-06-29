@@ -176,7 +176,7 @@ class _SeguimientoPeligroScreenState extends State<SeguimientoPeligroScreen> {
               ],
             ),
             const Divider(height: 20),
-            _buildInfoRow('Área', deteccion.areaId.toString(), Icons.business),
+            _buildInfoRow('Código de Contrato', deteccion.contratoCodigo, Icons.assignment),
             _buildInfoRow('Lugar Exacto', deteccion.lugarExacto, Icons.location_on),
             _buildInfoRow('Turno', deteccion.turno, Icons.access_time),
             _buildInfoRow('Nivel LGF', deteccion.nivelAtencionLabel, Icons.warning),

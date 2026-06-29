@@ -2,14 +2,17 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:excel/excel.dart' as excel hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../config/theme_context_ext.dart';
+import '../providers/auth_provider.dart';
 import '../services/trabajador_service.dart';
 import '../utils/download_helper.dart' as download_helper;
 import 'editar_trabajador_screen.dart';
 import '../widgets/collapsible_sidebar.dart';
+import '../widgets/app_header.dart';
 import 'registro_trabajador_screen.dart';
 import 'deteccion_peligro_screen.dart';
 import 'solicitud_levantamiento_screen.dart';
@@ -41,12 +44,32 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
   Timer? _searchDebounce;
   String? _lastSearchQuery;
   List<Map<String, dynamic>>? _cachedFilteredResults;
+  String? _ultimoContratoCargado;
 
   @override
-  void initState() { super.initState(); _cargarDatos(); }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _cargarDatos());
+  }
 
   @override
   void dispose() { _searchDebounce?.cancel(); super.dispose(); }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+  }
+
+  /// Se llama en cada build. Detecta cambios en el contrato seleccionado
+  /// y recarga los datos si es necesario.
+  void _verificarCambioContrato() {
+    final auth = context.read<AuthProvider>();
+    final contratoActual = auth.contratoSeleccionadoContexto;
+    if (_ultimoContratoCargado != contratoActual && mounted) {
+      debugPrint('=== Cambio de contrato detectado: "$_ultimoContratoCargado" -> "$contratoActual" ===');
+      _cargarDatos();
+    }
+  }
 
   static int? _toIntStatic(dynamic value) {
     if (value is int) return value;
@@ -62,7 +85,12 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
   Future<void> _cargarDatos() async {
     setState(() => _isLoading = true);
     try {
-      final data = await _service.fetchDatosExportacion();
+      final auth = context.read<AuthProvider>();
+      debugPrint('=== _cargarDatos: contratoSeleccionadoContexto="${auth.contratoSeleccionadoContexto}" ===');
+      debugPrint('contratosUsuario: ${auth.contratosUsuario}');
+      debugPrint('rolUsuario: ${auth.rolUsuario}');
+      debugPrint('isAuthenticated: ${auth.isAuthenticated}');
+      final data = await _service.fetchDatosExportacion(contratoCodigo: auth.contratoSeleccionadoContexto);
       final trabajadores = data['trabajadores']!;
       final cumplimiento = data['cumplimiento']!;
       final requisitos = data['requisitos']!;
@@ -84,6 +112,7 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
         _searchQuery = '';
         _lastSearchQuery = null;
         _cachedFilteredResults = null;
+        _ultimoContratoCargado = auth.contratoSeleccionadoContexto;
         _isLoading = false;
       });
     } catch (e) {
@@ -365,6 +394,9 @@ class _GestionPersonalScreenState extends State<GestionPersonalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchar cambios en AuthProvider para detectar cambio de contrato
+    context.watch<AuthProvider>();
+    _verificarCambioContrato();
     final ctx = context;
     final isWide = MediaQuery.of(context).size.width >= 768;
     return Scaffold(
@@ -397,7 +429,12 @@ class _GestionPersonalContent extends StatelessWidget {
     final isWide = MediaQuery.of(context).size.width >= 768;
     return Column(
       children: [
-        _GestionHeader(ctx: ctx),
+        AppHeader(
+          title: 'Gestion de Personal',
+          subtitle: 'Administracion de trabajadores y acreditaciones',
+          icon: Icons.people_rounded,
+          iconColor: ctx.successGreen,
+        ),
         Expanded(
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(isWide ? 24 : 16, 0, isWide ? 24 : 16, 24),
@@ -419,52 +456,6 @@ class _GestionPersonalContent extends StatelessWidget {
       ],
     );
   }
-}
-
-class _GestionHeader extends StatelessWidget {
-  final BuildContext ctx;
-  const _GestionHeader({required this.ctx});
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-    decoration: BoxDecoration(border: Border(bottom: BorderSide(color: ctx.dividerColor, width: 1))),
-    child: Row(
-      children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Contrato: CON-1024-SQM', style: TextStyle(color: ctx.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 2),
-          Text('Gestion de Personal', style: TextStyle(color: ctx.textSecondary, fontSize: 12)),
-        ]),
-        const Spacer(),
-        _HeaderBadge(icon: Icons.check_circle_rounded, label: 'Activo', color: ctx.successGreen),
-        const SizedBox(width: 12),
-        _HeaderBadge(icon: Icons.notifications_none_rounded, label: '3', color: ctx.warningYellow),
-        const SizedBox(width: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: ctx.surfaceCard, borderRadius: BorderRadius.circular(8)),
-          child: Row(children: [
-            Icon(Icons.calendar_today_rounded, color: ctx.textMuted, size: 14),
-            const SizedBox(width: 6),
-            Text('14 Jun 2026', style: TextStyle(color: ctx.textSecondary, fontSize: 12)),
-          ]),
-        ),
-        const SizedBox(width: 12),
-        CircleAvatar(radius: 18, backgroundColor: ctx.accentOrange, child: const Icon(Icons.person, color: Colors.white, size: 20)),
-      ],
-    ),
-  );
-}
-
-class _HeaderBadge extends StatelessWidget {
-  final IconData icon; final String label; final Color color;
-  const _HeaderBadge({required this.icon, required this.label, required this.color});
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.3), width: 0.5)),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: color, size: 16), const SizedBox(width: 4), Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600))]),
-  );
 }
 
 class _KpiData { final String title; final String value; final Color color; final IconData icon; final String subtitle; const _KpiData({required this.title, required this.value, required this.color, required this.icon, required this.subtitle}); }

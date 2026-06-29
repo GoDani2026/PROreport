@@ -87,7 +87,9 @@ class Trabajador {
       'sexo': sexo,
       'turno': turno,
       'estado_trabajador': estadoTrabajador,
-      'contrato_codigo': contratoCodigo,
+      // NOTA: contrato_codigo ya no se envía aquí.
+      // Se maneja a través de la tabla intermedia trabajador_contratos
+      // vía la RPC upsert_trabajador_completo.
     };
   }
 

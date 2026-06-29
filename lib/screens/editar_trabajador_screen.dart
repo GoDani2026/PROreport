@@ -58,6 +58,17 @@ class _EditarTrabajadorScreenState extends State<EditarTrabajadorScreen> {
     _initControllers();
     _saveOriginals();
     _loadRequisitos();
+    _loadContrato();
+  }
+
+  Future<void> _loadContrato() async {
+    final trabajadorId = widget.trabajador['id'] as int?;
+    if (trabajadorId == null) return;
+    final contrato = await _service.fetchContratoCodigoByTrabajadorId(trabajadorId);
+    if (mounted && contrato.isNotEmpty) {
+      _contratoCodigoController.text = contrato;
+      _originalTrabajador['contrato_codigo'] = contrato;
+    }
   }
 
   @override

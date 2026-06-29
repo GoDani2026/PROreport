@@ -9,7 +9,7 @@
 CREATE TABLE IF NOT EXISTS perfiles (
   id uuid REFERENCES auth.users PRIMARY KEY,
   nombre_completo text,
-  rol text DEFAULT 'colaborador' CHECK (rol IN ('colaborador', 'supervisor', 'admin')),
+  rol text DEFAULT 'colaborador' CHECK (rol IN ('colaborador', 'supervisor', 'admin', 'superadmin')),
   avatar_url text,
   trabajador_id integer UNIQUE REFERENCES trabajadores(id) ON DELETE SET NULL,
   created_at timestamp DEFAULT now()

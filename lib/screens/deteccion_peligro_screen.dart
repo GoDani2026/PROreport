@@ -3,17 +3,22 @@
 // ----------------------------------------------------------------
 // Formulario ágil mobile-first para reportar un peligro en terreno.
 // Flujo: 1 Reporte = 1 Registro.
+// NOTA: El campo "Área" fue reemplazado por "Código de Contrato".
 // ================================================================
 
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/auth_provider.dart';
 import '../providers/peligro_provider.dart';
 import '../config/theme.dart';
 import '../config/theme_context_ext.dart';
 import '../services/peligros_service.dart';
 import '../widgets/collapsible_sidebar.dart';
+import '../widgets/app_header.dart';
 import 'gestion_personal_screen.dart';
 import 'solicitud_levantamiento_screen.dart';
 
@@ -41,7 +46,17 @@ class _DeteccionPeligroScreenState extends State<DeteccionPeligroScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PeligroProvider>().loadCatalogos();
+      final auth = context.read<AuthProvider>();
+      final peligroProvider = context.read<PeligroProvider>();
+
+      // Inicializar el contrato seleccionado con el contrato global
+      if (peligroProvider.selectedContratoCodigo == null &&
+          auth.contratoSeleccionadoContexto.isNotEmpty) {
+        peligroProvider.setContratoCodigo(auth.contratoSeleccionadoContexto);
+      }
+
+      // Cargar catálogos (supervisores)
+      peligroProvider.loadCatalogos();
     });
   }
 
@@ -130,8 +145,11 @@ class _DeteccionPeligroScreenState extends State<DeteccionPeligroScreen> {
   Widget build(BuildContext context) {
     final ctx = context;
     final isWide = MediaQuery.of(context).size.width > 768;
-    final bodyContent = Consumer<PeligroProvider>(
-      builder: (context, provider, _) {
+    final bodyContent = Consumer2<PeligroProvider, AuthProvider>(
+      builder: (context, provider, auth, _) {
+        final contratos = auth.contratosUsuario;
+        final mostrarDropdownContrato = contratos.length > 1;
+
         return SingleChildScrollView(
           controller: _scrollController,
           padding: const EdgeInsets.all(16),
@@ -141,19 +159,23 @@ class _DeteccionPeligroScreenState extends State<DeteccionPeligroScreen> {
               _buildSectionHeader(ctx, 'Identificación', Icons.person_pin),
               const SizedBox(height: 8),
 
-              DropdownButtonFormField<int>(
-                initialValue: provider.selectedAreaId,
-                decoration: _inputDecoration(ctx, 'Área *', Icons.business),
-                items: provider.areas.map((area) {
-                  return DropdownMenuItem(
-                    value: area['id'] as int,
-                    child: Text(area['nombre'] as String),
-                  );
-                }).toList(),
-                onChanged: (val) => provider.setAreaId(val),
-                validator: (val) => val == null ? 'Seleccione un área' : null,
-              ),
-              const SizedBox(height: 16),
+              // Dropdown de Código de Contrato (solo si hay múltiples contratos)
+              if (mostrarDropdownContrato)
+                DropdownButtonFormField<String>(
+                  initialValue: provider.selectedContratoCodigo,
+                  decoration: _inputDecoration(ctx, 'Código de Contrato *', Icons.assignment),
+                  items: contratos.map((codigo) {
+                    return DropdownMenuItem(
+                      value: codigo,
+                      child: Text(codigo),
+                    );
+                  }).toList(),
+                  onChanged: (val) => provider.setContratoCodigo(val),
+                  validator: (val) => val == null || val.isEmpty
+                      ? 'Seleccione un código de contrato'
+                      : null,
+                ),
+              if (mostrarDropdownContrato) const SizedBox(height: 16),
 
               TextField(
                 controller: _lugarController,
@@ -288,7 +310,12 @@ class _DeteccionPeligroScreenState extends State<DeteccionPeligroScreen> {
           ],
           child: Column(
             children: [
-              _buildDeteccionHeader(ctx),
+              AppHeader(
+                title: 'Detecciones de Peligro',
+                subtitle: 'Reporte de condiciones peligrosas en terreno',
+                icon: Icons.warning_amber_rounded,
+                iconColor: ctx.warningYellow,
+              ),
               Expanded(child: bodyContent),
             ],
           ),
@@ -307,39 +334,11 @@ class _DeteccionPeligroScreenState extends State<DeteccionPeligroScreen> {
         backgroundColor: _primary,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
-      ),
-      body: bodyContent,
-    );
-  }
-
-  Widget _buildDeteccionHeader(BuildContext ctx) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: ctx.dividerColor, width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, color: ctx.warningYellow, size: 28),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Detecciones de Peligro',
-                style: ctx.headingLg,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Reporte de condiciones peligrosas en terreno',
-                style: TextStyle(color: ctx.textSecondary, fontSize: 12),
-              ),
-            ],
-          ),
+        actions: const [
+          SizedBox(width: 40),
         ],
       ),
+      body: bodyContent,
     );
   }
 
@@ -383,7 +382,7 @@ class _DeteccionPeligroScreenState extends State<DeteccionPeligroScreen> {
   Widget _buildFotoButton(BuildContext ctx, PeligroProvider provider) {
     final hasFoto = provider.fotoEvidencia != null;
     return SizedBox(
-      height: 120,
+      height: hasFoto ? 72 : 120,
       child: ElevatedButton(
         onPressed: () async {
           final source = await showDialog<ImageSource>(
@@ -414,29 +413,51 @@ class _DeteccionPeligroScreenState extends State<DeteccionPeligroScreen> {
           }
         },
         style: ElevatedButton.styleFrom(
-          backgroundColor: hasFoto ? ctx.accentOrange : ctx.surfaceCard,
+          backgroundColor: ctx.surfaceCard,
           foregroundColor: ctx.textPrimary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(color: hasFoto ? ctx.accentOrange : ctx.borderColor, width: 2),
           ),
           elevation: hasFoto ? 4 : 0,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
         ),
         child: hasFoto
             ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.check_circle, size: 32, color: ctx.successGreen),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 56,
+                      height: 56,
+                      child: kIsWeb || provider.fotoEvidencia!.path.startsWith('blob:')
+                          ? Image.network(
+                              provider.fotoEvidencia!.path,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const Icon(Icons.broken_image, size: 28, color: Colors.grey),
+                            )
+                          : Image.file(
+                              File(provider.fotoEvidencia!.path),
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const Icon(Icons.broken_image, size: 28, color: Colors.grey),
+                            ),
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      '✓ Foto capturada: ${provider.fotoEvidencia!.name.length > 25 ? '${provider.fotoEvidencia!.name.substring(0, 22)}...' : provider.fotoEvidencia!.name}',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: ctx.textPrimary),
+                      provider.fotoEvidencia!.name,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: ctx.textPrimary),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   GestureDetector(
                     onTap: () => provider.clearFotoEvidencia(),
-                    child: Icon(Icons.close, color: ctx.errorRed),
+                    child: Icon(Icons.close, size: 20, color: ctx.errorRed),
                   ),
                 ],
               )

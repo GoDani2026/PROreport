@@ -77,8 +77,17 @@ class Validators {
     final v = raw.trim();
     if (v.isEmpty || v == 'N/A' || v == 'n/a') return '';
     try {
-      // Si ya viene en formato ISO (yyyy-MM-dd), retornar tal cual
-      if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v)) return v;
+      // Si ya viene en formato ISO (yyyy-MM-dd), validar mes y día
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v)) {
+        final partesIso = v.split('-');
+        if (partesIso.length == 3) {
+          final mes = int.parse(partesIso[1]);
+          final dia = int.parse(partesIso[2]);
+          if (mes < 1 || mes > 12) return '';
+          if (dia < 1 || dia > 31) return '';
+        }
+        return v;
+      }
 
       List<String> partes;
       // Intentar con '/' (MM/dd/yyyy o dd/MM/yyyy)
@@ -96,14 +105,21 @@ class Validators {
         final p2 = int.parse(partes[1]);
         final anio = int.parse(partes[2]);
         if (anio > 1900 && anio < 2100) {
+          int mes, dia;
           // Si p1 > 12, es dd/MM/yyyy; si p1 <= 12, tratar como MM/dd/yyyy
           if (p1 > 12) {
             // Formato dd/MM/yyyy o dd-MM-yyyy
-            return '$anio-${p2.toString().padLeft(2, '0')}-${p1.toString().padLeft(2, '0')}';
+            dia = p1;
+            mes = p2;
           } else {
             // Asumir MM/dd/yyyy (formato usado en el Excel)
-            return '$anio-${p1.toString().padLeft(2, '0')}-${p2.toString().padLeft(2, '0')}';
+            mes = p1;
+            dia = p2;
           }
+          // Validar rangos reales de mes y día
+          if (mes < 1 || mes > 12) return '';
+          if (dia < 1 || dia > 31) return '';
+          return '$anio-${mes.toString().padLeft(2, '0')}-${dia.toString().padLeft(2, '0')}';
         }
       }
     } catch (_) {}
